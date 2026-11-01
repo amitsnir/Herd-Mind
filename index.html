@@ -220,7 +220,7 @@
     <div class="card" id="host-settings">
       <h2>Game settings</h2>
       <div class="row">
-        <div><label for="set-rounds">Rounds</label>
+        <div id="set-rounds-wrap"><label for="set-rounds">Rounds</label>
           <select id="set-rounds"><option>5</option><option selected>8</option><option>10</option><option>15</option><option>20</option></select></div>
         <div><label for="set-time">Seconds each</label>
           <select id="set-time"><option>10</option><option>15</option><option selected>20</option><option>30</option><option>45</option><option>60</option><option value="0">No timer</option></select></div>
@@ -229,7 +229,6 @@
       <label>Questions</label>
       <div class="tabs" id="src-tabs">
         <button data-src="bank" class="on">Built-in</button>
-        <button data-src="mix">Mix</button>
         <button data-src="custom">Mine only</button>
       </div>
       <div id="custom-wrap" class="hidden">
@@ -237,6 +236,7 @@
         <p class="muted small" style="margin-top:6px">2–4 options per question, separated by <b>|</b>. Tip: use your friends' names as options.</p>
         <label class="filebtn">📄 Load questions from a file<input type="file" id="lobby-file" accept=".txt,.csv,.tsv,.xlsx,.xls,text/plain,text/csv"></label>
         <div class="ok" id="lobby-file-msg"></div>
+        <p class="small" id="custom-count" style="margin:8px 0 0;font-weight:700"></p>
       </div>
       <div class="gap"></div>
       <label class="toggle"><input type="checkbox" id="set-approve" checked> Approve each player before they join</label>
@@ -271,7 +271,7 @@
       <input id="ed-name" maxlength="40" placeholder="e.g. Friday night with the team">
       <div class="gap"></div>
       <div class="row">
-        <div><label for="ed-rounds">Rounds</label>
+        <div id="ed-rounds-wrap"><label for="ed-rounds">Rounds</label>
           <select id="ed-rounds"><option>5</option><option selected>8</option><option>10</option><option>15</option><option>20</option><option>30</option></select></div>
         <div><label for="ed-time">Seconds each</label>
           <select id="ed-time"><option>10</option><option>15</option><option selected>20</option><option>30</option><option>45</option><option>60</option><option value="0">No timer</option></select></div>
@@ -280,13 +280,13 @@
       <label>Questions</label>
       <div class="tabs" id="ed-tabs">
         <button data-src="bank">Built-in</button>
-        <button data-src="mix">Mix</button>
         <button data-src="custom" class="on">Mine only</button>
       </div>
       <div id="ed-custom-wrap">
         <textarea id="ed-custom" style="min-height:180px" placeholder="One per line: Question | Option | Option | Option&#10;Best snack? | Chips | Popcorn | Chocolate | Fruit"></textarea>
         <label class="filebtn">📄 Load questions from a file<input type="file" id="ed-file" accept=".txt,.csv,.tsv,.xlsx,.xls,text/plain,text/csv"></label>
         <div class="ok" id="ed-file-msg"></div>
+        <p class="small" id="ed-count" style="margin:8px 0 0;font-weight:700"></p>
         <p class="muted small" style="margin-top:8px">Files: a text file with one question per line (<b>Question | A | B | C | D</b>), or a CSV / Excel sheet with the question in the first column and 2–4 options in the next columns.</p>
       </div>
       <div class="gap"></div>
@@ -1067,10 +1067,23 @@ function renderFinal(G) {
 }
 
 /* ---------------- Host logic ---------------- */
+// "bank" = built-in questions (you pick the number of rounds); anything else = your own questions (one round per question)
+const normSrc = (v) => v === "bank" ? "bank" : "custom";
+const TAB_PARTS = { "src-tabs": ["set-rounds-wrap", "custom", "custom-count"], "ed-tabs": ["ed-rounds-wrap", "ed-custom", "ed-count"] };
+function updateCount(tabsId) {
+  const [, ta, cnt] = TAB_PARTS[tabsId];
+  const n = parseCustom($(ta).value).length;
+  $(cnt).textContent = n ? n + (n === 1 ? " question → 1 round" : " questions → " + n + " rounds") : "No questions yet. Each question you add is one round.";
+}
 function setTabs(tabsId, wrapId, src) {
+  src = normSrc(src);
   document.querySelectorAll("#" + tabsId + " button").forEach(x => x.classList.toggle("on", x.dataset.src === src));
   $(wrapId).classList.toggle("hidden", src === "bank");
+  $(TAB_PARTS[tabsId][0]).style.display = src === "bank" ? "" : "none";
+  updateCount(tabsId);
 }
+$("custom").addEventListener("input", () => updateCount("src-tabs"));
+$("ed-custom").addEventListener("input", () => updateCount("ed-tabs"));
 document.querySelectorAll("#src-tabs button").forEach(b => b.onclick = () => { S.src = b.dataset.src; setTabs("src-tabs", "custom-wrap", S.src); });
 $("custom").value = load("herd-custom");
 
@@ -1106,15 +1119,14 @@ function buildDeck() {
     if (!S.fromSaved) store("herd-custom", $("custom").value);
     if (!mine.length) { $("lobby-err").textContent = "Add at least one question in the format: Question | A | B"; return null; }
   }
-  if (S.src === "custom") deck = shuffle(mine);
-  else if (S.src === "mix") deck = shuffle(mine.concat(shuffle(BANK).slice(0, Math.max(0, n - mine.length))));
-  else deck = shuffle(BANK);
-  return { deck, n, dur };
+  if (S.src === "bank") { deck = shuffle(BANK); return { deck, n: Math.min(n, deck.length), dur }; }
+  deck = shuffle(mine); // your own questions: every question is played, one round each
+  return { deck, n: deck.length, dur };
 }
 function openWait() {
   const b = buildDeck(); if (!b) return false;
   const rounds = Math.min(b.n, b.deck.length);
-  const src = S.src === "bank" ? "built-in questions" : S.src === "mix" ? "your questions + built-in" : "your questions";
+  const src = S.src === "bank" ? "built-in questions" : "your questions";
   const name = S.fromSaved ? clean(S.fromSaved.name, 40) + " · " : "";
   S.G.wait = true;
   S.G.sum = name + rounds + " rounds · " + (b.dur ? b.dur + "s each" : "no timer") + " · " + src;
@@ -1273,6 +1285,7 @@ function wireFile(inputId, textareaId, msgId, errId) {
       if (!lines.length) { $(errId).textContent = "No questions found in " + f.name + ". Use one per line: Question | A | B"; return; }
       const ta = $(textareaId);
       ta.value = (ta.value.trim() ? ta.value.trim() + "\n" : "") + lines.join("\n");
+      updateCount(textareaId === "custom" ? "src-tabs" : "ed-tabs");
       $(msgId).textContent = "Added " + lines.length + " question" + (lines.length === 1 ? "" : "s") + " from " + f.name;
     } catch (err) {
       $(errId).textContent = "Couldn't read that file. Try saving it as .csv or .txt.";
@@ -1313,8 +1326,9 @@ function renderSaved() {
   for (const g of list) {
     const d = el("div", "sg");
     const nq = Array.isArray(g.questions) ? g.questions.length : 0;
-    const src = g.src === "bank" ? "built-in questions" : g.src === "mix" ? nq + " of yours + built-in" : nq + " questions";
-    d.append(el("div", "t", clean(g.name, 40) || "Untitled game"), el("div", "muted small", (g.src === "custom" ? Math.min(g.rounds || 8, nq) : (g.rounds || 8)) + " rounds · " + (g.dur === 0 ? "no timer" : (g.dur || 20) + "s") + " · " + src));
+    const isBank = g.src === "bank";
+    const src = isBank ? "built-in questions" : "your questions";
+    d.append(el("div", "t", clean(g.name, 40) || "Untitled game"), el("div", "muted small", (isBank ? (g.rounds || 8) : nq) + " rounds · " + (g.dur === 0 ? "no timer" : (g.dur || 20) + "s") + " · " + src));
     const acts = el("div", "acts");
     const host = el("button", "go", "Host now"); host.onclick = () => hostSaved(g);
     const edit = el("button", null, "Edit"); edit.onclick = () => openEditor(g);
@@ -1334,9 +1348,10 @@ function openEditor(g) {
   $("ed-name").value = g ? clean(g.name, 40) : "";
   $("ed-rounds").value = String(g?.rounds || 8);
   $("ed-time").value = String(g?.dur ?? 20);
-  SV.src = g?.src || "custom"; setTabs("ed-tabs", "ed-custom-wrap", SV.src);
+  SV.src = normSrc(g?.src || "custom");
   $("ed-custom").value = g && Array.isArray(g.questions) ? g.questions.map(([q, o]) => [q, ...o].join(" | ")).join("\n") : "";
   $("ed-err").textContent = ""; $("ed-file-msg").textContent = "";
+  setTabs("ed-tabs", "ed-custom-wrap", SV.src);
   show("edit"); window.scrollTo(0, 0);
 }
 document.querySelectorAll("#ed-tabs button").forEach(b => b.onclick = () => { SV.src = b.dataset.src; setTabs("ed-tabs", "ed-custom-wrap", SV.src); });
@@ -1349,7 +1364,7 @@ $("ed-save").onclick = async () => {
   if (!name) { $("ed-err").textContent = "Give the game a name."; $("ed-name").focus(); return; }
   const questions = SV.src === "bank" ? [] : parseCustom($("ed-custom").value).slice(0, 200);
   if (SV.src !== "bank" && !questions.length) { $("ed-err").textContent = "Add at least one question: Question | A | B"; return; }
-  const body = { name, rounds: +$("ed-rounds").value, dur: +$("ed-time").value, src: SV.src, questions, updatedAt: Date.now() };
+  const body = { name, rounds: SV.src === "bank" ? +$("ed-rounds").value : questions.length, dur: +$("ed-time").value, src: SV.src, questions, updatedAt: Date.now() };
   const btn = $("ed-save"); btn.disabled = true; btn.textContent = "Saving…";
   try {
     await saveGame(SV.editId, body);
@@ -1380,8 +1395,9 @@ function applyPreset(g) {
   S.fromSaved = g;
   $("set-rounds").value = [...$("set-rounds").options].some(o => o.value == g.rounds) ? String(g.rounds) : (() => { const o = new Option(String(g.rounds)); $("set-rounds").add(o); return String(g.rounds); })();
   $("set-time").value = String(g.dur ?? 20);
-  S.src = g.src || "custom"; setTabs("src-tabs", "custom-wrap", S.src);
+  S.src = normSrc(g.src || "custom");
   $("custom").value = Array.isArray(g.questions) ? g.questions.map(([q, o]) => [q, ...o].join(" | ")).join("\n") : "";
+  setTabs("src-tabs", "custom-wrap", S.src);
   $("lobby-from").textContent = "Using your saved game “" + clean(g.name, 40) + "”. You can still change anything before starting.";
   $("lobby-from").classList.remove("hidden");
 }
