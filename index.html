@@ -127,6 +127,9 @@
   .toggle input{width:22px;height:22px;accent-color:#1b1712;margin:0}
   body.has-reqs .wrap{padding-bottom:200px}
   .btn.wa{background:#25d366;color:#0b2e17}
+  /* Each line takes the direction of its own text, so Hebrew/Arabic read right-to-left */
+  .q, .opt > span:last-child, .bar .lbl > span:first-child, .chip, .brow .nm, .pod .who, .sg .t, .req .who, textarea, #name, #ed-name, #wait-summary { unicode-bidi: plaintext; text-align: start; }
+  .q, #wait-summary { text-align: start; }
   .hidden{display:none!important}
   .center{text-align:center}
   .linkish{background:none;border:0;font:inherit;font-weight:700;text-decoration:underline;cursor:pointer;color:var(--ink);padding:0}
