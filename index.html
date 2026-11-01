@@ -126,6 +126,7 @@
   .toggle{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;cursor:pointer;margin:0}
   .toggle input{width:22px;height:22px;accent-color:#1b1712;margin:0}
   body.has-reqs .wrap{padding-bottom:200px}
+  .btn.wa{background:#25d366;color:#0b2e17}
   .hidden{display:none!important}
   .center{text-align:center}
   .linkish{background:none;border:0;font:inherit;font-weight:700;text-decoration:underline;cursor:pointer;color:var(--ink);padding:0}
@@ -200,7 +201,12 @@
       <p class="muted small" style="margin:0">Room code</p>
       <div class="code" id="lobby-code">----</div>
       <p class="muted small">Friends open this page and enter the code, or send them the invite link.</p>
-      <button class="btn yel" id="btn-invite" style="margin-top:4px">🔗 Copy invite link</button>
+      <a class="btn wa" id="btn-wa" href="#" target="_blank" rel="noopener" style="margin-top:4px;text-decoration:none">Share on WhatsApp</a>
+      <div class="gap"></div>
+      <div class="row">
+        <button class="btn yel" id="btn-invite">🔗 Copy link</button>
+        <button class="btn alt hidden" id="btn-share">Share…</button>
+      </div>
       <input id="invite-url" readonly class="hidden" style="margin-top:10px;font-size:13px;font-family:'DM Mono',monospace">
       <p class="muted small" id="invite-msg" style="margin:8px 0 0"></p>
     </div>
@@ -1415,6 +1421,25 @@ function renderRequests() {
   });
   if (pend.length > 1) { const all = el("button", "all", "Let everyone in"); all.onclick = () => S.game.admitAll(); box.append(all); }
 }
+
+/* ---------------- Share on WhatsApp / share sheet ---------------- */
+const inviteText = () => "Join my Herd Mind game! Room " + S.code.toUpperCase() + " 🎉 " + inviteLink();
+function fileWarn() {
+  $("invite-url").classList.add("hidden");
+  $("invite-msg").replaceChildren(el("b", null, "This game is opened from a file on your computer, so a link to it won't work on anyone else's phone. "),
+    document.createTextNode("Open it from your website address (like https://yourname.github.io/...) and host from there."));
+  $("invite-msg").style.color = "var(--bad)";
+}
+$("btn-wa").addEventListener("click", (e) => {
+  if (!S.code) { e.preventDefault(); return; }
+  if (location.protocol === "file:") { e.preventDefault(); fileWarn(); return; }
+  $("btn-wa").href = "https://wa.me/?text=" + encodeURIComponent(inviteText());
+});
+if (navigator.share) $("btn-share").classList.remove("hidden");
+$("btn-share").onclick = async () => {
+  if (location.protocol === "file:") return fileWarn();
+  try { await navigator.share({ title: "Herd Mind", text: "Join my Herd Mind game! Room " + S.code.toUpperCase(), url: inviteLink() }); } catch (e) {}
+};
 
 // Re-render players periodically so stale "no host" status updates
 setInterval(() => { if (S.game && !currentG()) render(); }, 2000);
