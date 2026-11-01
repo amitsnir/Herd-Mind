@@ -470,23 +470,37 @@ function safePresence(p) {
 }
 /* Backup path: a public MQTT message relay over secure WebSockets. Used when a
    direct connection can't be made (strict Wi-Fi, mobile data, office networks). */
-const RELAYS = window.HERD_MQTT_URLS || ["wss://broker.emqx.io:8084/mqtt", "wss://broker.hivemq.com:8884/mqtt", "wss://test.mosquitto.org:8081/mqtt"];
+const RELAYS = window.HERD_MQTT_URLS || [
+  { url: "wss://demo.tbmq.io:443/mqtt", username: "demo" },  // port 443: gets through strict Wi-Fi
+  { url: "wss://broker.emqx.io:8084/mqtt" },
+  { url: "wss://broker.hivemq.com:8884/mqtt" },
+  { url: "wss://test.mosquitto.org:8081/mqtt" },
+];
 const RTOP = "herdmind/v1/";
 const rid = () => Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 6);
-function relayConnect() {
+function relayOne(r) {
+  const cfg = typeof r === "string" ? { url: r } : r;
   return new Promise((res, rej) => {
     if (!window.mqtt) return rej({ code: "nolib" });
-    let i = 0;
-    const tryNext = () => {
-      if (i >= RELAYS.length) return rej({ code: "relay-down" });
-      const url = RELAYS[i++];
-      let settled = false;
-      const cli = mqtt.connect(url, { clean: true, connectTimeout: 5000, reconnectPeriod: 0, clientId: "hm_" + rid() });
-      const t = setTimeout(() => { if (!settled) { settled = true; try { cli.end(true); } catch (e) {} tryNext(); } }, 6000);
-      cli.on("connect", () => { if (settled) return; settled = true; clearTimeout(t); cli.options.reconnectPeriod = 2000; res(cli); });
-      cli.on("error", () => { if (settled) return; settled = true; clearTimeout(t); try { cli.end(true); } catch (e) {} tryNext(); });
-    };
-    tryNext();
+    let settled = false;
+    const opts = { clean: true, connectTimeout: 6000, reconnectPeriod: 0, clientId: "hm_" + rid() };
+    if (cfg.username) opts.username = cfg.username;
+    if (cfg.password) opts.password = cfg.password;
+    const cli = mqtt.connect(cfg.url, opts);
+    const t = setTimeout(() => { if (!settled) { settled = true; try { cli.end(true); } catch (e) {} rej({ code: "relay-down" }); } }, 7000);
+    cli.on("connect", () => { if (settled) return; settled = true; clearTimeout(t); cli.options.reconnectPeriod = 3000; res(cli); });
+    cli.on("error", () => { if (settled) return; settled = true; clearTimeout(t); try { cli.end(true); } catch (e) {} rej({ code: "relay-down" }); });
+  });
+}
+// Players: try every relay at once and keep the first that answers.
+function relayConnect() {
+  if (!window.mqtt) return Promise.reject({ code: "nolib" });
+  return new Promise((res, rej) => {
+    let won = null, left = RELAYS.length;
+    RELAYS.forEach((r) => relayOne(r).then((cli) => {
+      if (won) { try { cli.end(true); } catch (e) {} return; }
+      won = cli; res(cli);
+    }, () => { if (--left === 0 && !won) rej({ code: "relay-down" }); }));
   });
 }
 // A relay "connection" that behaves like a PeerJS DataConnection (on/send/open/close/peer).
@@ -504,25 +518,37 @@ function makeLink(id, sendFn, onGone) {
   };
   return L;
 }
-async function relayHost(code, onConnection) {
-  const cli = await relayConnect();
-  const links = new Map();
-  const sub = () => cli.subscribe(RTOP + code + "/h", { qos: 0 });
-  sub(); cli.on("connect", sub);
-  cli.on("message", (topic, buf) => {
-    let msg; try { msg = JSON.parse(buf.toString()); } catch (e) { return; }
-    const id = String((msg && msg.f) || "");
-    if (!/^[a-z0-9]{8,24}$/.test(id) || !msg.m || typeof msg.m !== "object") return;
-    let L = links.get(id);
-    if (msg.m.t === "bye") { if (L) L._close(); return; }
-    if (!L) {
-      if (links.size > 60) return;
-      L = makeLink(id, (m) => cli.publish(RTOP + code + "/c/" + id, JSON.stringify(m)), () => links.delete(id));
-      links.set(id, L); onConnection(L); L._open();
-    }
-    L._data(msg.m);
+function relayHost(code, onConnection) {
+  const links = new Map(), clis = [];
+  const attach = (cli) => {
+    clis.push(cli);
+    const sub = () => cli.subscribe(RTOP + code + "/h", { qos: 0 });
+    sub(); cli.on("connect", sub);
+    cli.on("message", (topic, buf) => {
+      let msg; try { msg = JSON.parse(buf.toString()); } catch (e) { return; }
+      const id = String((msg && msg.f) || "");
+      if (!/^[a-z0-9]{8,24}$/.test(id) || !msg.m || typeof msg.m !== "object") return;
+      let L = links.get(id);
+      if (msg.m.t === "bye") { if (L) L._close(); return; }
+      if (!L) {
+        if (links.size > 60) return;
+        L = makeLink(id, (m) => cli.publish(RTOP + code + "/c/" + id, JSON.stringify(m)), () => links.delete(id));
+        links.set(id, L); onConnection(L); L._open();
+      }
+      L._data(msg.m);
+    });
+  };
+  const api = { close() { api.closed = true; for (const L of [...links.values()]) L.close(); clis.forEach(c => { try { c.end(true); } catch (e) {} }); } };
+  // Open the room as soon as one relay answers; the others join in the background.
+  return new Promise((res, rej) => {
+    if (!window.mqtt) return rej({ code: "nolib" });
+    let first = false, left = RELAYS.length;
+    RELAYS.forEach((r) => relayOne(r).then((cli) => {
+      if (api.closed) { try { cli.end(true); } catch (e) {} return; }
+      attach(cli);
+      if (!first) { first = true; res(api); }
+    }, () => { if (--left === 0 && !first) rej({ code: "relay-down" }); }));
   });
-  return { close() { for (const L of [...links.values()]) L.close(); try { cli.end(true); } catch (e) {} } };
 }
 async function relayClient(code) {
   const cli = await relayConnect();
