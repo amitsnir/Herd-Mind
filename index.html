@@ -7,7 +7,7 @@
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Mono:wght@500&family=Rubik:wght@500;700;800;900&family=Bungee&family=Bungee+Shade&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#f6efe2; --ink:#1b1712; --muted:#6d6457; --card:#fffaf1; --line:#1b1712;
@@ -130,6 +130,12 @@
   /* Each line takes the direction of its own text, so Hebrew/Arabic read right-to-left */
   .q, .opt > span:last-child, .bar .lbl > span:first-child, .chip, .brow .nm, .pod .who, .sg .t, .req .who, textarea, #name, #ed-name, #wait-summary { unicode-bidi: plaintext; text-align: start; }
   .q, #wait-summary { text-align: start; }
+  header{gap:8px;flex-wrap:wrap}
+  .logo{white-space:nowrap}
+  body.mood-party .logo{font-size:26px}
+  @media (max-width:420px){ body.mood-party .logo{font-size:22px} body.mood-party .logo .sheep{font-size:26px} .pill{font-size:11px;padding:3px 7px} }
+  .pill.mood{cursor:pointer;font:inherit;font-size:12px;font-weight:700;color:var(--ink)}
+  body.mood-party .pill.mood{background:linear-gradient(90deg,#ff3ea5,#ffe14d,#29e7ff);animation:wave 2.4s ease-in-out infinite}
   .hidden{display:none!important}
   .center{text-align:center}
   .linkish{background:none;border:0;font:inherit;font-weight:700;text-decoration:underline;cursor:pointer;color:var(--ink);padding:0}
@@ -137,17 +143,160 @@
   .err{color:var(--bad);font-weight:700;font-size:14px;margin-top:8px;min-height:1em}
   @keyframes pop{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
   .pop{animation:pop .25s ease-out}
+
+  /* =================== PARTY MOOD (body.mood-party) =================== */
+  .floaters,.fx{display:none}
+  body.mood-party .floaters, body.mood-party .fx{display:block}
+  body.mood-party{
+    --ink:#170a26; --muted:#5b4a6e; --card:#fffdf4; --line:#170a26;
+    --a:#ff3ea5; --b:#ffe14d; --c:#29e7ff; --d:#9b6bff; --e:#8cff3a;
+    --good:#13b86b; --bad:#ff2d55;
+    --shadow:6px 6px 0 var(--line);
+  }
+  body.mood-party{font-family:"Rubik","Bricolage Grotesque",system-ui,sans-serif}
+  body.mood-party{
+    background:linear-gradient(125deg,#ff3ea5,#ff8a3d,#ffe14d,#8cff3a,#29e7ff,#9b6bff,#ff3ea5);
+    background-size:500% 500%; animation:party 22s ease infinite; background-attachment:fixed;
+  }
+  body.mood-party::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:radial-gradient(rgba(23,10,38,.22) 1.2px,transparent 1.3px);background-size:16px 16px}
+  @keyframes party{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+  body.mood-party .wrap{position:relative;z-index:2}
+
+  /* floating sheep */
+  body.mood-party .floaters{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden}
+  body.mood-party .floaters span{position:absolute;bottom:-60px;font-size:32px;opacity:.55;animation:floatUp linear infinite;filter:drop-shadow(2px 3px 0 rgba(23,10,38,.35))}
+  @keyframes floatUp{0%{transform:translateY(0) rotate(0)}50%{transform:translateY(-55vh) translateX(30px) rotate(20deg)}100%{transform:translateY(-115vh) translateX(-20px) rotate(-15deg)}}
+
+  /* logo */
+  body.mood-party header{margin-bottom:22px}
+  body.mood-party .logo{gap:10px;font-family:"Bungee","Rubik",sans-serif;font-weight:400;font-size:30px;letter-spacing:0}
+  body.mood-party .logo .sheep{font-size:34px;display:inline-block;animation:hop 1.6s ease-in-out infinite;transform-origin:50% 100%}
+  body.mood-party .logo .word span{color:var(--lc);display:inline-block;animation:wave 2.4s ease-in-out infinite;-webkit-text-stroke:2px var(--line);paint-order:stroke fill;text-shadow:3px 3px 0 var(--line)}
+  @keyframes hop{0%,100%{transform:translateY(0) rotate(-6deg)}30%{transform:translateY(-9px) rotate(8deg) scaleY(1.05)}55%{transform:translateY(0) scaleY(.9)}}
+  @keyframes wave{0%,100%{transform:translateY(0) rotate(0)}25%{transform:translateY(-4px) rotate(-4deg)}75%{transform:translateY(2px) rotate(3deg)}}
+  body.mood-party .pill{font-family:"Rubik",sans-serif;font-weight:800;border-width:2.5px;box-shadow:3px 3px 0 var(--line)}
+
+  /* sticker cards, slightly tilted */
+  body.mood-party .card{border:3px solid var(--line);border-radius:22px;box-shadow:var(--shadow);background:var(--card);transition:transform .25s cubic-bezier(.3,1.6,.5,1)}
+  body.mood-party section > .card:nth-of-type(odd){transform:rotate(-.7deg)}
+  body.mood-party section > .card:nth-of-type(even){transform:rotate(.6deg)}
+  body.mood-party h1{font-family:"Bungee","Rubik",sans-serif;font-weight:400;font-size:36px;line-height:1.05;letter-spacing:0;text-shadow:3px 3px 0 var(--b)}
+  body.mood-party #s-lobby > h1, body.mood-party #s-final h1{color:#fff;-webkit-text-stroke:2.5px var(--line);paint-order:stroke fill;text-shadow:4px 4px 0 var(--line)}
+  body.mood-party #s-final h1{color:var(--b)}
+  body.mood-party h2{font-weight:900;font-size:21px}
+  body.mood-party #s-home .card:first-child h1{font-size:40px;text-shadow:none;background:linear-gradient(90deg,#ff3ea5,#9b6bff,#29e7ff);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:0}
+  body.mood-party #s-home .card:first-child{background:#fff;position:relative;overflow:visible}
+  body.mood-party #s-home .card:first-child::after{content:"🎉";position:absolute;top:-18px;right:-10px;font-size:42px;transform:rotate(18deg);animation:hop 2s ease-in-out infinite}
+
+  /* buttons: bouncy & chunky */
+  body.mood-party .btn{font-family:"Rubik",sans-serif;font-weight:900;font-size:19px;border:3px solid var(--line);border-radius:16px;box-shadow:5px 5px 0 var(--line);
+       transition:transform .12s cubic-bezier(.3,1.8,.5,1),box-shadow .12s;background:var(--ink);color:#fff}
+  body.mood-party .btn:hover{transform:translate(-2px,-2px) rotate(-1deg);box-shadow:7px 7px 0 var(--line)}
+  body.mood-party .btn:active{transform:translate(4px,4px) scale(.97);box-shadow:1px 1px 0 var(--line)}
+  body.mood-party .btn.yel{background:var(--b);color:var(--ink)}
+  body.mood-party .btn.alt{background:#fff;color:var(--ink)}
+  body.mood-party #btn-create, body.mood-party #btn-start, body.mood-party #btn-open{background:linear-gradient(90deg,#ff3ea5,#9b6bff);color:#fff;text-shadow:2px 2px 0 var(--line)}
+  body.mood-party #btn-start{font-size:22px;padding:18px;animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.035) rotate(-.6deg)}}
+  body.mood-party input, body.mood-party select, body.mood-party textarea{border:3px solid var(--line);border-radius:14px;font-family:"Rubik",sans-serif;font-weight:600}
+  body.mood-party input:focus, body.mood-party select:focus, body.mood-party textarea:focus{box-shadow:0 0 0 4px var(--a)}
+  body.mood-party textarea{font-family:"Rubik",sans-serif;font-weight:500}
+
+  /* avatar picker */
+  body.mood-party .avgrid button{border-width:2.5px;border-radius:12px;font-size:24px;transition:transform .15s cubic-bezier(.3,1.8,.5,1)}
+  body.mood-party .avgrid button:hover{transform:scale(1.15) rotate(-8deg)}
+  body.mood-party .avgrid button.on{background:var(--b);transform:scale(1.18) rotate(6deg);box-shadow:3px 3px 0 var(--line);z-index:1}
+
+  /* room code */
+  body.mood-party .code{font-family:"Bungee Shade","Bungee",monospace;font-size:54px;letter-spacing:.12em;color:var(--a);padding:2px 0 6px}
+  body.mood-party .code span{display:inline-block;animation:wave 2s ease-in-out infinite}
+
+  /* player chips */
+  body.mood-party .chip{border-width:2.5px;font-weight:800;box-shadow:2px 2px 0 var(--line)}
+  body.mood-party .chip.pop{animation:chipIn .5s cubic-bezier(.3,1.8,.5,1)}
+  @keyframes chipIn{0%{transform:scale(0) rotate(-180deg)}100%{transform:scale(1) rotate(0)}}
+  body.mood-party .chip.done{background:var(--e)}
+
+  /* question screen */
+  body.mood-party .q{font-family:"Rubik",sans-serif;font-weight:900;font-size:30px;line-height:1.15}
+  body.mood-party #s-question .card:first-child{animation:slam .45s cubic-bezier(.3,1.6,.5,1)}
+  @keyframes slam{0%{transform:scale(.6) rotate(-6deg);opacity:0}100%{transform:scale(1) rotate(-.7deg);opacity:1}}
+  body.mood-party .opts{gap:12px}
+  body.mood-party .opt{font-family:"Rubik",sans-serif;font-weight:800;font-size:20px;border:3px solid var(--line);border-radius:18px;box-shadow:5px 5px 0 var(--line);padding:16px;
+       transition:transform .15s cubic-bezier(.3,1.8,.5,1),box-shadow .15s,opacity .2s}
+  body.mood-party .opt:nth-child(1){background:var(--a)!important}
+  body.mood-party .opt:nth-child(2){background:var(--b)!important}
+  body.mood-party .opt:nth-child(3){background:var(--c)!important}
+  body.mood-party .opt:nth-child(4){background:var(--e)!important}
+  body.mood-party .opt:not([disabled]):hover{transform:translate(-2px,-3px) rotate(-1.2deg) scale(1.02);box-shadow:8px 8px 0 var(--line)}
+  body.mood-party .opt:nth-child(even):not([disabled]):hover{transform:translate(-2px,-3px) rotate(1.2deg) scale(1.02)}
+  body.mood-party .opt.pop{animation:optIn .4s cubic-bezier(.3,1.7,.5,1) both}
+  body.mood-party .opt.pop:nth-child(2){animation-delay:.06s}body.mood-party .opt.pop:nth-child(3){animation-delay:.12s}body.mood-party .opt.pop:nth-child(4){animation-delay:.18s}
+  @keyframes optIn{0%{transform:translateX(-30px) scale(.7);opacity:0}100%{transform:none;opacity:1}}
+  body.mood-party .opt .k{border-width:2.5px;border-radius:10px;font-family:"Bungee",monospace;background:#fff}
+  body.mood-party .opt.picked{outline:none;transform:scale(1.04) rotate(-1deg);box-shadow:0 0 0 5px #fff,0 0 0 8px var(--line),8px 8px 0 8px var(--line);animation:picked .5s cubic-bezier(.3,1.8,.5,1)}
+  @keyframes picked{0%{transform:scale(.9)}60%{transform:scale(1.08) rotate(-2deg)}100%{transform:scale(1.04) rotate(-1deg)}}
+  body.mood-party .opt.dim{opacity:.3;filter:grayscale(.6)}
+
+  /* candy-stripe timer */
+  body.mood-party .timer{height:16px;border:3px solid var(--line);background:#fff}
+  body.mood-party .timer i{background:repeating-linear-gradient(45deg,var(--a) 0 10px,var(--d) 10px 20px);background-size:28px 28px;animation:stripes .6s linear infinite}
+  @keyframes stripes{to{background-position:28px 0}}
+  body.mood-party .timer.hurry{animation:shake .25s linear infinite}
+  body.mood-party .timer.hurry i{background:repeating-linear-gradient(45deg,#ff2d55 0 10px,#ffe14d 10px 20px)}
+  body.mood-party .meta{font-family:"Rubik",sans-serif;font-weight:800;font-size:14px}
+  body.mood-party #q-left{font-family:"Bungee",monospace;font-size:18px}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px) rotate(-.5deg)}75%{transform:translateX(3px) rotate(.5deg)}}
+
+  /* reveal */
+  body.mood-party .verdict{font-family:"Bungee","Rubik",sans-serif;font-weight:400;font-size:22px;border-width:3px;box-shadow:4px 4px 0 var(--line);animation:slam .5s cubic-bezier(.3,1.6,.5,1)}
+  body.mood-party .verdict.yes{background:var(--e)}
+  body.mood-party .verdict.no{background:#ff9cb4}
+  body.mood-party .shake{animation:shake .35s linear 3!important}
+  body.mood-party .bar{border-width:3px;border-radius:16px}
+  body.mood-party .bar .lbl{font-weight:800}
+  body.mood-party .bar.win{box-shadow:5px 5px 0 var(--line);transform:scale(1.02) rotate(-.6deg)}
+  body.mood-party .crown{display:inline-block;animation:hop 1s ease-in-out infinite}
+  body.mood-party .brow{border-width:2.5px;border-radius:14px;font-weight:700}
+  body.mood-party .brow .plus{font-weight:900;color:#0a8a4f;animation:hop .9s ease-in-out 2}
+
+  /* podium */
+  body.mood-party .pod .blk{border-width:3px;font-family:"Bungee",monospace;animation:rise .8s cubic-bezier(.3,1.5,.5,1) both}
+  body.mood-party .pod:nth-child(1) .blk{animation-delay:.35s}body.mood-party .pod:nth-child(2) .blk{animation-delay:.1s}body.mood-party .pod:nth-child(3) .blk{animation-delay:.6s}
+  @keyframes rise{0%{transform:scaleY(0);transform-origin:bottom}100%{transform:scaleY(1);transform-origin:bottom}}
+  body.mood-party .pod .face{font-size:44px;animation:hop 1.3s ease-in-out infinite}
+  body.mood-party .pod:nth-child(2) .face{font-size:54px}
+  body.mood-party .pod:nth-child(2) .who::before{content:"👑 "}
+
+  /* waiting dots */
+  body.mood-party .pulse i{width:18px;height:18px;border-width:2.5px}
+
+  /* confetti / emoji bursts */
+  body.mood-party .fx{position:fixed;inset:0;pointer-events:none;z-index:50;overflow:hidden}
+  body.mood-party .fx .bit{position:absolute;top:-30px;will-change:transform;animation:fall linear forwards}
+  body.mood-party .fx .sq{width:10px;height:14px;border:1.5px solid var(--line);border-radius:2px}
+  body.mood-party .fx .emo{font-size:26px}
+  @keyframes fall{to{transform:translate(var(--dx),110vh) rotate(var(--rot))}}
+  body.mood-party .fx .pop{position:absolute;font-size:24px;animation:burst .8s cubic-bezier(.2,.8,.3,1) forwards}
+  @keyframes burst{0%{transform:translate(0,0) scale(.4);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(1.1) rotate(var(--rot));opacity:0}}
+
+  body.mood-party .reqs-in{border-width:3px;box-shadow:6px 6px 0 var(--line);animation:slam .4s cubic-bezier(.3,1.6,.5,1)}
+
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation:none!important;transition:none!important}
+    .floaters,.fx{display:none}
+  }
 </style>
 </head>
 <body>
+<div class="floaters" aria-hidden="true" id="floaters"></div>
+<div class="fx" aria-hidden="true" id="fx"></div>
 <div class="reqs hidden" id="reqs"><div class="reqs-in"><b id="reqs-title">Wants to join</b><div id="reqs-list"></div></div></div>
 <div class="wrap">
   <header>
-    <div class="logo">
-      <span class="dots"><i style="background:var(--a)"></i><i style="background:var(--b)"></i><i style="background:var(--c)"></i><i style="background:var(--d)"></i></span>
-      Herd Mind
-    </div>
-    <span style="display:flex;gap:6px"><span class="pill hidden" id="room-pill" style="background:var(--b)"></span><span class="pill" id="conn">connecting…</span></span>
+    <div class="logo" id="logo"><span class="sheep">🐑</span><span class="word" id="logo-word">Herd Mind</span></div>
+    <span style="display:flex;gap:6px;align-items:center"><button class="pill mood" id="btn-mood" type="button" title="Change the look"></button><span class="pill hidden" id="room-pill" style="background:var(--b)"></span><span class="pill" id="conn">connecting…</span></span>
   </header>
 
   <div id="offline" class="notice hidden">
@@ -867,7 +1016,7 @@ function render() {
   }
   if (!S.isHost && S.game.status && S.game.status() === "pending") {
     show("lobby");
-    $("lobby-code").textContent = S.code.toUpperCase();
+    wavyCode($("lobby-code"), S.code.toUpperCase());
     ["host-settings", "host-wait", "code-card"].forEach(id => $(id).classList.add("hidden"));
     $("lobby-players").parentElement.classList.add("hidden");
     $("lobby-wait").classList.remove("hidden");
@@ -881,7 +1030,7 @@ function render() {
   if (!G) {
     // no host visible
     show("lobby");
-    $("lobby-code").textContent = S.code.toUpperCase();
+    wavyCode($("lobby-code"), S.code.toUpperCase());
     $("host-settings").classList.add("hidden"); $("host-wait").classList.add("hidden");
     $("lobby-wait").classList.remove("hidden");
     $("lobby-h").textContent = "Waiting room";
@@ -912,7 +1061,7 @@ function renderLobbyPlayers() {
 }
 function renderLobby(G) {
   show("lobby");
-  $("lobby-code").textContent = S.code.toUpperCase();
+  wavyCode($("lobby-code"), S.code.toUpperCase());
   const waiting = !!G.wait;
   const hostName = clean(G.host, 16) || "the host";
   $("lobby-h").textContent = S.isHost && !waiting ? "Set up your game" : "Waiting room";
@@ -974,6 +1123,7 @@ function startTick(G) {
     const left = Math.max(0, g.dur * 1000 - (Date.now() - t0));
     $("q-left").textContent = left ? Math.ceil(left / 1000) + "s" : "time's up";
     $("q-bar").style.width = (100 * left / (g.dur * 1000)) + "%";
+    $("q-bar").parentElement.classList.toggle("hurry", left > 0 && left < 5000);
     if (!left) {
       clearInterval(tick);
       if (!S.timedOut[g.k]) { S.timedOut[g.k] = true; render(); }
@@ -986,6 +1136,7 @@ function answer(r, i) {
   const G = currentG();
   if (!G || G.phase !== "q" || G.r !== r || S.myAns || timeUp(G)) return;
   S.myAns = { id: G.id, k: G.k, r, i };
+  burstAt(document.querySelector("#q-opts .opt:nth-child(" + (i + 1) + ")"));
   S.game.presence({ ans: S.myAns });
   render();
 }
@@ -1038,8 +1189,13 @@ function renderReveal(G) {
   const mine = isAns(S.myAns, G) ? S.myAns.i : null;
   if (!win.size) { v.className = "verdict meh"; v.textContent = (counts.some(x => x) ? "Total split — no herd this time" : "Nobody answered"); }
   else if (mine == null) { v.className = "verdict meh"; v.textContent = "You didn't answer"; }
-  else if (win.has(mine)) { v.className = "verdict yes"; v.textContent = "You're one of the herd! +100"; }
-  else { v.className = "verdict no"; v.textContent = "Lone wolf. No points."; }
+  else if (win.has(mine)) { v.className = "verdict yes"; v.textContent = "🐑 You're one of the herd! +100"; }
+  else { v.className = "verdict no"; v.textContent = "🐺 Lone wolf. No points."; }
+  if (!S.fx["v" + G.k]) {
+    S.fx["v" + G.k] = true;
+    if (win.size && mine != null && win.has(mine)) confetti(80, ["🐑", "🎉", "⭐"]);
+    else if (win.size && mine != null) { const c = v.closest(".card"); c.classList.remove("shake"); void c.offsetWidth; c.classList.add("shake"); }
+  }
   renderBoard($("r-board"), G, true);
   $("btn-next").classList.toggle("hidden", !S.isHost);
   $("btn-next").textContent = G.r >= G.n ? "See final results" : "Next question";
@@ -1048,6 +1204,7 @@ function renderReveal(G) {
 }
 
 function renderFinal(G) {
+  if (!S.fx["f" + G.id + (G.ended || "")]) { S.fx["f" + G.id + (G.ended || "")] = true; confetti(160, ["🐑", "🏆", "🎉", "👑", "🥳"]); setTimeout(() => confetti(90, ["🐑", "🎉"]), 1200); }
   show("final");
   clearInterval(tick);
   const rows = renderBoard($("f-board"), G, false);
@@ -1484,6 +1641,70 @@ if (navigator.share) $("btn-share").classList.remove("hidden");
 $("btn-share").onclick = async () => {
   if (location.protocol === "file:") return fileWarn();
   try { await navigator.share({ title: "Herd Mind", text: "Join my Herd Mind game! Room " + S.code.toUpperCase(), url: inviteLink() }); } catch (e) {}
+};
+
+/* ---------------- Party effects ---------------- */
+const REDUCED = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+(function partyDecor() {
+  // rainbow wavy logo letters
+  const w = $("logo-word"); const cols = ["#ff3ea5", "#ffe14d", "#29e7ff", "#8cff3a", "#9b6bff", "#ff8a3d"];
+  const txt = w.textContent; w.textContent = "";
+  [...txt].forEach((ch, i) => { const sp = el("span", null, ch === " " ? " " : ch); sp.style.setProperty("--lc", cols[i % cols.length]); sp.style.animationDelay = (i * 0.09) + "s"; w.append(sp); });
+  // floating sheep & friends
+  const f = $("floaters"); const kinds = ["🐑", "🐑", "🐑", "🐏", "☁️", "✨", "🐑"];
+  for (let i = 0; i < 11; i++) {
+    const sp = el("span", null, kinds[i % kinds.length]);
+    sp.style.left = (4 + Math.random() * 90) + "%"; sp.style.fontSize = (22 + Math.random() * 26) + "px";
+    sp.style.animationDuration = (16 + Math.random() * 18) + "s"; sp.style.animationDelay = (-Math.random() * 30) + "s";
+    f.append(sp);
+  }
+})();
+const party = () => document.body.classList.contains("mood-party");
+function confetti(n = 90, emojis) {
+  if (REDUCED || !party()) return;
+  const box = $("fx"); const cols = ["#ff3ea5", "#ffe14d", "#29e7ff", "#8cff3a", "#9b6bff", "#ff8a3d"];
+  for (let i = 0; i < n; i++) {
+    const useEmo = emojis && Math.random() < 0.35;
+    const b = el("span", "bit " + (useEmo ? "emo" : "sq"), useEmo ? emojis[Math.floor(Math.random() * emojis.length)] : null);
+    if (!useEmo) b.style.background = cols[i % cols.length];
+    b.style.left = Math.random() * 100 + "vw";
+    b.style.setProperty("--dx", (Math.random() * 160 - 80) + "px");
+    b.style.setProperty("--rot", (Math.random() * 1080 - 540) + "deg");
+    b.style.animationDuration = (1.8 + Math.random() * 2.2) + "s";
+    b.style.animationDelay = (Math.random() * 0.6) + "s";
+    box.append(b); setTimeout(() => b.remove(), 5000);
+  }
+}
+function burstAt(node, emojis = ["✨", "💥", "⭐", "🐑"]) {
+  if (REDUCED || !node || !party()) return;
+  const r = node.getBoundingClientRect(); const box = $("fx");
+  for (let i = 0; i < 12; i++) {
+    const b = el("span", "pop", emojis[i % emojis.length]);
+    b.style.left = (r.left + r.width / 2 - 12) + "px"; b.style.top = (r.top + r.height / 2 - 12) + "px";
+    const a = Math.random() * Math.PI * 2, d = 60 + Math.random() * 90;
+    b.style.setProperty("--dx", Math.cos(a) * d + "px"); b.style.setProperty("--dy", Math.sin(a) * d + "px");
+    b.style.setProperty("--rot", (Math.random() * 360 - 180) + "deg");
+    box.append(b); setTimeout(() => b.remove(), 900);
+  }
+}
+function wavyCode(node, code) {
+  if (node.dataset.code === code) return;
+  node.dataset.code = code; node.textContent = "";
+  [...code].forEach((ch, i) => { const sp = el("span", null, ch); sp.style.animationDelay = (i * 0.15) + "s"; node.append(sp); });
+}
+S.fx = {};
+const MOODS = { party: "🎉 Party", chill: "😌 Chill" };
+function setMood(m) {
+  m = MOODS[m] ? m : "party";
+  document.body.classList.toggle("mood-party", m === "party");
+  $("btn-mood").textContent = MOODS[m];
+  $("btn-mood").setAttribute("aria-label", "Mood: " + (m === "party" ? "Party" : "Chill") + ". Tap to switch.");
+  store("herd-mood", m);
+}
+setMood(load("herd-mood") || "party");
+$("btn-mood").onclick = () => {
+  const next = party() ? "chill" : "party"; setMood(next);
+  if (next === "party") confetti(40, ["🎉", "🐑", "✨"]);
 };
 
 // Re-render players periodically so stale "no host" status updates
