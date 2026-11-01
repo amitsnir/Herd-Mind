@@ -1145,7 +1145,7 @@ function askRound(r) {
   }
   const [q, o] = S.deck[r - 1];
   G.r = r; G.k = Math.random().toString(36).slice(2, 8);
-  G.phase = "q"; G.q = clean(q, 140); G.o = o.slice(0, 4).map(x => clean(x, 48));
+  G.phase = "q"; G.q = clean(q, 140); G.o = shuffle(o.slice(0, 4).map(x => clean(x, 48))); // answers in a new random order each time
   G.c = []; G.win = []; G.got = [];
   S.hostT0 = Date.now();
   publishHost(); render(); window.scrollTo(0, 0);
