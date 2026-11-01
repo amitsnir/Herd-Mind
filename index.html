@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Herd Mind</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6efe2; --ink:#1b1712; --muted:#6d6457; --card:#fffaf1; --line:#1b1712;
+    --a:#ff6b4a; --b:#ffc83d; --c:#2ec4a6; --d:#8b6cf6;
+    --good:#1f9d6b; --bad:#d6453d;
+    --shadow:4px 4px 0 var(--line);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  body{min-height:100vh;background-image:radial-gradient(var(--ink) 0.6px, transparent 0.6px);background-size:18px 18px;background-attachment:fixed}
+  .wrap{max-width:560px;margin:0 auto;padding:20px 16px 48px}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .logo{font-weight:800;font-size:26px;letter-spacing:-0.03em;display:flex;align-items:center;gap:8px}
+  .logo .dots{display:inline-flex;gap:3px}
+  .logo .dots i{width:10px;height:10px;border-radius:50%;border:2px solid var(--line);display:block}
+  .pill{font-family:"DM Mono",monospace;font-size:12px;padding:4px 9px;border:2px solid var(--line);border-radius:99px;background:var(--card)}
+  .card{background:var(--card);border:2.5px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:18px;margin-bottom:16px}
+  h1{font-size:34px;line-height:1.02;letter-spacing:-0.03em;margin:0 0 8px;font-weight:800}
+  h2{font-size:20px;margin:0 0 12px;letter-spacing:-0.02em}
+  p{margin:0 0 10px;line-height:1.4}
+  .muted{color:var(--muted)}
+  .small{font-size:13px}
+  label{display:block;font-weight:700;font-size:14px;margin:0 0 6px}
+  input,select,textarea{width:100%;font:inherit;font-size:17px;padding:12px 14px;border:2.5px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);outline:none}
+  textarea{font-size:14px;min-height:110px;font-family:"DM Mono",monospace;resize:vertical}
+  input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px var(--b)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;font:inherit;font-weight:800;font-size:18px;padding:14px 16px;border:2.5px solid var(--line);border-radius:14px;background:var(--ink);color:var(--bg);cursor:pointer;box-shadow:var(--shadow);transition:transform .08s, box-shadow .08s}
+  .btn:active{transform:translate(3px,3px);box-shadow:1px 1px 0 var(--line)}
+  .btn.alt{background:var(--card);color:var(--ink)}
+  .btn.yel{background:var(--b);color:var(--ink)}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .row{display:flex;gap:10px}
+  .row>*{flex:1}
+  .gap{height:12px}
+  .code{font-family:"DM Mono",monospace;font-size:44px;letter-spacing:.18em;font-weight:500;text-align:center;padding:6px 0}
+  .players{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px 6px 6px;border:2px solid var(--line);border-radius:99px;background:#fff;font-weight:700;font-size:15px}
+  .chip .av{width:24px;height:24px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:12px;font-weight:800}
+  .chip.done{background:#e9f8ef}
+  .chip.wait{opacity:.55}
+  .games{display:flex;flex-direction:column;gap:8px}
+  .game{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:#fff;cursor:pointer;font:inherit;text-align:left;width:100%}
+  .game b{font-family:"DM Mono",monospace;letter-spacing:.1em}
+  .q{font-size:28px;font-weight:800;line-height:1.1;letter-spacing:-0.02em;margin:4px 0 16px}
+  .meta{display:flex;justify-content:space-between;align-items:center;font-family:"DM Mono",monospace;font-size:13px;margin-bottom:10px}
+  .timer{height:10px;border:2px solid var(--line);border-radius:99px;overflow:hidden;background:#fff;margin-bottom:16px}
+  .timer i{display:block;height:100%;background:var(--ink);width:100%;transition:width .25s linear}
+  .opts{display:grid;gap:10px}
+  .opt{position:relative;display:flex;align-items:center;gap:12px;font:inherit;font-size:19px;font-weight:700;text-align:left;padding:14px;border:2.5px solid var(--line);border-radius:14px;cursor:pointer;box-shadow:var(--shadow);color:var(--ink);transition:transform .08s, box-shadow .08s, opacity .2s}
+  .opt:active{transform:translate(3px,3px);box-shadow:1px 1px 0 var(--line)}
+  .opt .k{width:30px;height:30px;flex:none;border-radius:8px;border:2px solid var(--line);background:#fff;display:grid;place-items:center;font-family:"DM Mono",monospace;font-size:14px}
+  .opt.dim{opacity:.35}
+  .opt.picked{outline:4px solid var(--ink);outline-offset:2px}
+  .opt[disabled]{cursor:default}
+  .bars{display:grid;gap:10px}
+  .bar{border:2.5px solid var(--line);border-radius:14px;background:#fff;overflow:hidden;position:relative}
+  .bar .fill{position:absolute;inset:0 auto 0 0;border-right:2.5px solid var(--line);transition:width .7s cubic-bezier(.2,.9,.3,1)}
+  .bar .lbl{position:relative;display:flex;justify-content:space-between;align-items:center;padding:12px 14px;font-weight:700;font-size:17px;gap:10px}
+  .bar .n{font-family:"DM Mono",monospace;font-size:16px}
+  .bar.win{box-shadow:var(--shadow)}
+  .bar.lose .fill{opacity:.35}
+  .crown{display:inline-block;margin-right:6px}
+  .verdict{text-align:center;padding:14px;border:2.5px solid var(--line);border-radius:14px;font-weight:800;font-size:22px;margin-bottom:14px}
+  .verdict.yes{background:#c9f2dc}
+  .verdict.no{background:#ffd9d2}
+  .verdict.meh{background:#fff}
+  .board{display:grid;gap:6px}
+  .brow{display:flex;align-items:center;gap:10px;padding:8px 10px;border:2px solid var(--line);border-radius:12px;background:#fff}
+  .brow .pos{font-family:"DM Mono",monospace;width:22px;text-align:right}
+  .brow .nm{flex:1;font-weight:700}
+  .brow .pts{font-family:"DM Mono",monospace}
+  .brow .plus{font-family:"DM Mono",monospace;color:var(--good);font-size:13px}
+  .brow.me{background:#fff3c4}
+  .podium{display:flex;align-items:flex-end;justify-content:center;gap:8px;margin:10px 0 18px}
+  .pod{flex:1;max-width:130px;text-align:center}
+  .pod .blk{border:2.5px solid var(--line);border-radius:12px 12px 0 0;display:grid;place-items:center;font-family:"DM Mono",monospace;font-size:26px;box-shadow:var(--shadow)}
+  .pod .who{font-weight:800;margin-bottom:6px;word-break:break-word}
+  .pod .sc{font-family:"DM Mono",monospace;font-size:13px;margin-bottom:6px}
+  .notice{border:2.5px dashed var(--line);border-radius:14px;padding:12px 14px;background:#fff;font-size:14px;margin-bottom:16px}
+  .tabs{display:flex;border:2.5px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:10px}
+  .tabs button{flex:1;font:inherit;font-weight:700;font-size:14px;padding:9px 6px;border:0;background:#fff;cursor:pointer;color:var(--ink)}
+  .tabs button+button{border-left:2.5px solid var(--line)}
+  .tabs button.on{background:var(--ink);color:var(--bg)}
+  .saved{display:flex;flex-direction:column;gap:8px}
+  .sg{border:2px solid var(--line);border-radius:12px;background:#fff;padding:10px 12px}
+  .sg .t{font-weight:800;font-size:17px;word-break:break-word}
+  .sg .acts{display:flex;gap:8px;margin-top:8px}
+  .sg .acts button{flex:1;font:inherit;font-weight:700;font-size:14px;padding:8px;border:2px solid var(--line);border-radius:10px;background:var(--card);cursor:pointer;color:var(--ink)}
+  .sg .acts button.go{background:var(--ink);color:var(--bg)}
+  .filebtn{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:14px;padding:8px 12px;border:2px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;margin-top:8px}
+  .filebtn input{display:none}
+  .ok{color:var(--good);font-weight:700;font-size:14px;margin-top:8px}
+  .small-btn{font-size:15px;padding:11px 10px}
+  .small-btn.armed{background:var(--bad);color:#fff}
+  .pulse{display:flex;justify-content:center;gap:8px;padding-top:4px}
+  .pulse i{width:14px;height:14px;border-radius:50%;border:2px solid var(--line);animation:bob 1.2s infinite ease-in-out}
+  .pulse i:nth-child(1){background:var(--a)} .pulse i:nth-child(2){background:var(--b);animation-delay:.15s} .pulse i:nth-child(3){background:var(--c);animation-delay:.3s}
+  @keyframes bob{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-9px)}}
+  .chip.pop{animation:pop .25s ease-out}
+  .avgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+  .avgrid button{aspect-ratio:1;font-size:22px;line-height:1;border:2px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;padding:0;display:grid;place-items:center;transition:transform .08s}
+  .avgrid button:active{transform:scale(.92)}
+  .avgrid button.on{background:var(--b);box-shadow:2px 2px 0 var(--line);transform:translate(-1px,-1px)}
+  .chip .av.emo{background:#fff!important;font-size:15px}
+  .brow .ava{font-size:20px;width:26px;text-align:center}
+  .pod .face{font-size:34px;line-height:1;margin-bottom:4px}
+  .reqs{position:fixed;left:0;right:0;bottom:0;z-index:20;padding:10px 12px calc(10px + env(safe-area-inset-bottom));pointer-events:none}
+  .reqs-in{max-width:560px;margin:0 auto;background:var(--card);border:2.5px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:12px;pointer-events:auto;animation:pop .25s ease-out}
+  .req{display:flex;align-items:center;gap:8px;margin-top:8px}
+  .req .who{flex:1;font-weight:800;display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .req .who span:first-child{font-size:22px}
+  .req button{font:inherit;font-weight:800;font-size:14px;padding:8px 12px;border:2px solid var(--line);border-radius:10px;cursor:pointer}
+  .req .yes{background:var(--c)} .req .no{background:#fff}
+  .reqs .all{margin-top:10px;width:100%;font:inherit;font-weight:700;font-size:13px;background:none;border:0;text-decoration:underline;cursor:pointer;color:var(--ink)}
+  .chip .x{margin-left:4px;border:0;background:none;font:inherit;font-weight:800;cursor:pointer;color:var(--muted);padding:0 2px}
+  .toggle{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;cursor:pointer;margin:0}
+  .toggle input{width:22px;height:22px;accent-color:#1b1712;margin:0}
+  body.has-reqs .wrap{padding-bottom:200px}
+  .hidden{display:none!important}
+  .center{text-align:center}
+  .linkish{background:none;border:0;font:inherit;font-weight:700;text-decoration:underline;cursor:pointer;color:var(--ink);padding:0}
+  .rules{margin:0;padding-left:20px;line-height:1.5}
+  .err{color:var(--bad);font-weight:700;font-size:14px;margin-top:8px;min-height:1em}
+  @keyframes pop{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
+  .pop{animation:pop .25s ease-out}
+</style>
+</head>
+<body>
+<div class="reqs hidden" id="reqs"><div class="reqs-in"><b id="reqs-title">Wants to join</b><div id="reqs-list"></div></div></div>
+<div class="wrap">
+  <header>
+    <div class="logo">
+      <span class="dots"><i style="background:var(--a)"></i><i style="background:var(--b)"></i><i style="background:var(--c)"></i><i style="background:var(--d)"></i></span>
+      Herd Mind
+    </div>
+    <span style="display:flex;gap:6px"><span class="pill hidden" id="room-pill" style="background:var(--b)"></span><span class="pill" id="conn">connecting…</span></span>
+  </header>
+
+  <div id="offline" class="notice hidden">
+    Can't reach the game server. Check your internet connection and reload the page.
+  </div>
+
+  <!-- HOME -->
+  <section id="s-home">
+    <div class="card">
+      <h1>Don't be right.<br>Be popular.</h1>
+      <p class="muted">Everyone answers the same question. The "correct" answer is whatever most people pick. Match the crowd to score.</p>
+    </div>
+    <div class="notice hidden" id="invited" style="background:#fff3c4;border-style:solid;font-weight:700"></div>
+    <div class="card">
+      <label for="name">Your name</label>
+      <input id="name" maxlength="16" autocomplete="off" placeholder="e.g. Noa">
+      <div class="gap"></div>
+      <label>Pick your avatar</label>
+      <div class="avgrid" id="avgrid"></div>
+      <div class="gap"></div>
+      <button class="btn" id="btn-create">Host a new game</button>
+      <div class="gap"></div>
+      <label for="joincode">…or join with a code</label>
+      <div class="row">
+        <input id="joincode" maxlength="4" autocomplete="off" placeholder="ABCD" style="text-transform:uppercase;font-family:'DM Mono',monospace;letter-spacing:.15em">
+        <button class="btn yel" id="btn-join" style="flex:0 0 120px">Join</button>
+      </div>
+      <div class="err" id="home-err"></div>
+    </div>
+    <div class="card">
+      <h2>My games</h2>
+      <div class="saved" id="saved"><p class="muted small">Loading…</p></div>
+      <div class="gap"></div>
+      <button class="btn alt" id="btn-new">+ Create a game to host later</button>
+    </div>
+    <div class="card hidden" id="open-card">
+      <h2>Open games</h2>
+      <div class="games" id="games"><p class="muted small">No open games right now.</p></div>
+    </div>
+    <div class="card">
+      <h2>How scoring works</h2>
+      <ul class="rules small">
+        <li>Pick the answer you think <b>most players</b> will pick.</li>
+        <li>Everyone on the top answer gets <b>+100</b>. Ties at the top all score.</li>
+        <li>If every chosen answer is tied (total split), nobody scores.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="s-lobby" class="hidden">
+    <h1 id="lobby-h" style="margin:4px 2px 14px">Set up your game</h1>
+    <div class="card center" id="code-card">
+      <p class="muted small" style="margin:0">Room code</p>
+      <div class="code" id="lobby-code">----</div>
+      <p class="muted small">Friends open this page and enter the code, or send them the invite link.</p>
+      <button class="btn yel" id="btn-invite" style="margin-top:4px">🔗 Copy invite link</button>
+      <input id="invite-url" readonly class="hidden" style="margin-top:10px;font-size:13px;font-family:'DM Mono',monospace">
+      <p class="muted small" id="invite-msg" style="margin:8px 0 0"></p>
+    </div>
+    <div class="card">
+      <h2 id="lobby-count">Players</h2>
+      <div class="players" id="lobby-players"></div>
+    </div>
+    <div class="card" id="host-settings">
+      <h2>Game settings</h2>
+      <div class="row">
+        <div><label for="set-rounds">Rounds</label>
+          <select id="set-rounds"><option>5</option><option selected>8</option><option>10</option><option>15</option><option>20</option></select></div>
+        <div><label for="set-time">Seconds each</label>
+          <select id="set-time"><option>10</option><option>15</option><option selected>20</option><option>30</option><option>45</option><option>60</option><option value="0">No timer</option></select></div>
+      </div>
+      <div class="gap"></div>
+      <label>Questions</label>
+      <div class="tabs" id="src-tabs">
+        <button data-src="bank" class="on">Built-in</button>
+        <button data-src="mix">Mix</button>
+        <button data-src="custom">Mine only</button>
+      </div>
+      <div id="custom-wrap" class="hidden">
+        <textarea id="custom" placeholder="One per line: Question | Option | Option | Option&#10;Best snack? | Chips | Popcorn | Chocolate | Fruit&#10;Who's always late? | Dan | Maya | Yossi"></textarea>
+        <p class="muted small" style="margin-top:6px">2–4 options per question, separated by <b>|</b>. Tip: use your friends' names as options.</p>
+        <label class="filebtn">📄 Load questions from a file<input type="file" id="lobby-file" accept=".txt,.csv,.tsv,.xlsx,.xls,text/plain,text/csv"></label>
+        <div class="ok" id="lobby-file-msg"></div>
+      </div>
+      <div class="gap"></div>
+      <label class="toggle"><input type="checkbox" id="set-approve" checked> Approve each player before they join</label>
+      <p class="muted small hidden" id="lobby-from" style="margin-top:10px"></p>
+      <div class="gap"></div>
+      <button class="btn" id="btn-open">Open waiting room →</button>
+      <div class="err" id="lobby-err"></div>
+    </div>
+    <div class="card hidden center" id="host-wait">
+      <p class="muted small" style="margin:0 0 4px">Game</p>
+      <p style="font-weight:800;font-size:18px;margin:0 0 14px" id="wait-summary"></p>
+      <button class="btn" id="btn-start">Start game</button>
+      <p class="muted small" id="wait-hint" style="margin:10px 0 0"></p>
+      <div class="gap"></div>
+      <label class="toggle" style="justify-content:center"><input type="checkbox" id="wait-approve" checked> Approve players before they join</label>
+      <div class="gap"></div>
+      <button class="linkish small" id="btn-settings">Change settings</button>
+    </div>
+    <div class="card hidden center" id="lobby-wait">
+      <div class="pulse"><i></i><i></i><i></i></div>
+      <h2 style="margin:10px 0 6px" id="wait-title">You're in!</h2>
+      <p style="margin:0" class="muted" id="wait-sub">Waiting for <span id="lobby-host">the host</span> to start…</p>
+    </div>
+    <button class="linkish small" id="btn-leave">Leave game</button>
+  </section>
+
+  <!-- EDIT (saved game) -->
+  <section id="s-edit" class="hidden">
+    <div class="card">
+      <h2 id="ed-title">Create a game</h2>
+      <label for="ed-name">Game name</label>
+      <input id="ed-name" maxlength="40" placeholder="e.g. Friday night with the team">
+      <div class="gap"></div>
+      <div class="row">
+        <div><label for="ed-rounds">Rounds</label>
+          <select id="ed-rounds"><option>5</option><option selected>8</option><option>10</option><option>15</option><option>20</option><option>30</option></select></div>
+        <div><label for="ed-time">Seconds each</label>
+          <select id="ed-time"><option>10</option><option>15</option><option selected>20</option><option>30</option><option>45</option><option>60</option><option value="0">No timer</option></select></div>
+      </div>
+      <div class="gap"></div>
+      <label>Questions</label>
+      <div class="tabs" id="ed-tabs">
+        <button data-src="bank">Built-in</button>
+        <button data-src="mix">Mix</button>
+        <button data-src="custom" class="on">Mine only</button>
+      </div>
+      <div id="ed-custom-wrap">
+        <textarea id="ed-custom" style="min-height:180px" placeholder="One per line: Question | Option | Option | Option&#10;Best snack? | Chips | Popcorn | Chocolate | Fruit"></textarea>
+        <label class="filebtn">📄 Load questions from a file<input type="file" id="ed-file" accept=".txt,.csv,.tsv,.xlsx,.xls,text/plain,text/csv"></label>
+        <div class="ok" id="ed-file-msg"></div>
+        <p class="muted small" style="margin-top:8px">Files: a text file with one question per line (<b>Question | A | B | C | D</b>), or a CSV / Excel sheet with the question in the first column and 2–4 options in the next columns.</p>
+      </div>
+      <div class="gap"></div>
+      <button class="btn" id="ed-save">Save game</button>
+      <div class="err" id="ed-err"></div>
+    </div>
+    <button class="linkish small" id="ed-cancel">Cancel</button>
+  </section>
+
+  <!-- QUESTION -->
+  <section id="s-question" class="hidden">
+    <div class="card">
+      <div class="meta"><span id="q-round">Round 1/8</span><span id="q-left">20s</span></div>
+      <div class="timer"><i id="q-bar"></i></div>
+      <div class="q" id="q-text"></div>
+      <div class="opts" id="q-opts"></div>
+    </div>
+    <div class="card">
+      <h2 id="q-status" style="margin-bottom:10px">Answers</h2>
+      <div class="players" id="q-players"></div>
+    </div>
+    <button class="btn hidden" id="btn-force">Show results</button>
+    <div class="row hostbar hidden" id="q-hostbar" style="margin-top:12px">
+      <button class="btn alt small-btn" data-act="back">◀ Previous</button>
+      <button class="btn alt small-btn" data-act="end">End game</button>
+    </div>
+  </section>
+
+  <!-- REVEAL -->
+  <section id="s-reveal" class="hidden">
+    <div class="card">
+      <div class="meta"><span id="r-round"></span><span>The herd has spoken</span></div>
+      <div class="q" id="r-text" style="font-size:22px"></div>
+      <div class="verdict" id="r-verdict"></div>
+      <div class="bars" id="r-bars"></div>
+    </div>
+    <div class="card">
+      <h2>Scores</h2>
+      <div class="board" id="r-board"></div>
+    </div>
+    <button class="btn" id="btn-next">Next question</button>
+    <div class="row hostbar hidden" id="r-hostbar" style="margin-top:12px">
+      <button class="btn alt small-btn" data-act="back">◀ Previous</button>
+      <button class="btn alt small-btn" data-act="end">End game</button>
+    </div>
+    <p class="center muted hidden" id="r-wait">Waiting for the host…</p>
+  </section>
+
+  <!-- FINAL -->
+  <section id="s-final" class="hidden">
+    <div class="card center">
+      <h1>Most in sync with the herd</h1>
+      <p class="muted small hidden" id="f-early"></p>
+      <div class="podium" id="podium"></div>
+      <div class="board" id="f-board" style="text-align:left"></div>
+    </div>
+    <button class="btn" id="btn-again">Play again</button>
+    <div class="gap"></div>
+    <button class="btn alt" id="btn-home">Back to start</button>
+  </section>
+</div>
+
+<script>
+/* ---------------- Question bank ---------------- */
+const BANK = [
+  ["Best pizza topping?", ["Pepperoni","Mushrooms","Pineapple","Extra cheese"]],
+  ["Ideal vacation?", ["Beach","Mountains","Big city","Stay home"]],
+  ["First drink of the morning?", ["Coffee","Tea","Water","Juice"]],
+  ["Best superpower?", ["Flying","Invisibility","Teleportation","Mind reading"]],
+  ["Best season?", ["Spring","Summer","Autumn","Winter"]],
+  ["Cats or dogs?", ["Cats","Dogs","Both","Neither"]],
+  ["Worst chore?", ["Dishes","Laundry","Vacuuming","Cleaning the bathroom"]],
+  ["Best day of the week?", ["Thursday","Friday","Saturday","Sunday"]],
+  ["Give up for a year?", ["Phone","Coffee","Sweets","Streaming"]],
+  ["Best way to eat potatoes?", ["Fries","Mashed","Baked","Chips"]],
+  ["Most useless invention?", ["Selfie stick","Fidget spinner","Smart fridge","Hoverboard"]],
+  ["Breakfast for dinner?", ["Always yes","Sometimes","Weird","Never"]],
+  ["Best movie snack?", ["Popcorn","Nachos","Candy","Nothing"]],
+  ["Morning person or night owl?", ["Morning","Night","Neither","Both, somehow"]],
+  ["Time machine: where to?", ["Dinosaurs","Ancient Egypt","The '80s","100 years ahead"]],
+  ["Best pet name?", ["Biscuit","Luna","Captain","Kevin"]],
+  ["Worst smell?", ["Durian","Wet dog","Old fridge","Gym bag"]],
+  ["Ice cream flavor?", ["Chocolate","Vanilla","Pistachio","Strawberry"]],
+  ["Hardest to live without?", ["Internet","Hot water","Music","Air conditioning"]],
+  ["Best board game?", ["Monopoly","Catan","Scrabble","Chess"]],
+  ["Which apocalypse role?", ["Leader","Medic","Cook","First to go"]],
+  ["Best sandwich bread?", ["Baguette","Pita","Sourdough","Plain white"]],
+  ["Most annoying sound?", ["Chewing","Alarm clock","Nails on board","Phone on speaker"]],
+  ["Best way to spend $1,000?", ["Travel","Save it","Gadgets","Food"]],
+  ["Pick a mythical creature", ["Dragon","Unicorn","Phoenix","Mermaid"]],
+  ["Beach or pool?", ["Beach","Pool","Lake","None, thanks"]],
+  ["Best eggs?", ["Scrambled","Fried","Boiled","Shakshuka"]],
+  ["Worst place to be stuck?", ["Elevator","Traffic","Airport","Family dinner"]],
+  ["Which would you rather fight?", ["1 horse-sized duck","100 duck-sized horses","A goose","Nothing, run"]],
+  ["Best fruit?", ["Mango","Watermelon","Strawberry","Banana"]],
+  ["Ideal Friday night?", ["Party","Couch + show","Dinner out","Sleep early"]],
+  ["Best kind of weather?", ["Sunny","Rainy","Snowy","Cloudy and cool"]],
+  ["Pick a color", ["Blue","Green","Red","Black"]],
+  ["Best number from 1 to 4?", ["1","2","3","4"]],
+  ["Pineapple on pizza is…", ["Great","Fine","Wrong","A crime"]],
+  ["Best transport?", ["Car","Bike","Train","Walking"]],
+  ["Toilet paper: over or under?", ["Over","Under","Don't care","What?"]],
+  ["Most overrated?", ["Brunch","Avocado toast","Influencers","Crypto"]],
+  ["Which planet would you visit?", ["Mars","Saturn","Jupiter","Stay on Earth"]],
+  ["Cake or pie?", ["Cake","Pie","Cheesecake","Cookies"]],
+  ["Best chip flavor?", ["Salted","BBQ","Sour cream & onion","Salt & vinegar"]],
+  ["Shower: morning or night?", ["Morning","Night","Both","Depends"]],
+  ["Which sense to keep?", ["Sight","Hearing","Taste","Touch"]],
+  ["Best place to read?", ["Bed","Couch","Beach","Train"]],
+  ["Hot drink?", ["Coffee","Tea","Hot chocolate","None"]]
+];
+
+/* ---------------- Helpers ---------------- */
+const $ = (id) => document.getElementById(id);
+const OPT_COLORS = ["var(--a)","var(--b)","var(--c)","var(--d)"];
+const AV_COLORS = ["#ff6b4a","#ffc83d","#2ec4a6","#8b6cf6","#4aa8ff","#ff8fc7","#9ad14b","#ff9f43"];
+const clean = (s, n) => String(s ?? "").replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁯﻿]/g, "").trim().slice(0, n);
+const keyOf = (name) => clean(name, 16).toLowerCase();
+const colorOf = (name) => { let h = 0; for (const ch of keyOf(name)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return AV_COLORS[h % AV_COLORS.length]; };
+const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const AVATARS = ["🦊","🐼","🐸","🐙","🦁","🐯","🐨","🐵","🦄","🐧","🐢","🦉","🐝","🐳","🦖","🐶","🐱","🐰","🐻","🐮","🐷","🤖","👻","👽"];
+const okAv = (a) => AVATARS.includes(a) ? a : "";
+function chip(name, cls, avatar) {
+  const c = el("span", "chip " + (cls || ""));
+  const a = okAv(avatar);
+  const av = el("span", "av" + (a ? " emo" : ""), a || (clean(name, 16)[0] || "?").toUpperCase());
+  av.style.background = colorOf(name);
+  c.append(av, document.createTextNode(clean(name, 16)));
+  return c;
+}
+function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function load(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
+
+/* ---------------- State ---------------- */
+const S = {
+  room: null,        // lobby namespace
+  game: null,        // named room
+  code: null,
+  isHost: false,
+  name: "",
+  src: "bank",
+  myAns: null,       // {r, i}
+  seen: {},          // question -> local timestamp first seen
+  timedOut: {},      // question -> timer ran out here
+  // host-only
+  G: null, deck: [], hostT0: 0, unsubGame: null,
+};
+
+/* ---------------- Screens ---------------- */
+const SCREENS = ["home","lobby","edit","question","reveal","final"];
+function show(name) {
+  SCREENS.forEach(s => $("s-" + s).classList.toggle("hidden", s !== name));
+  const rp = $("room-pill"); const inGame = !!S.code && name !== "home" && name !== "edit";
+  rp.classList.toggle("hidden", !inGame);
+  if (inGame) rp.textContent = "Room " + S.code.toUpperCase();
+}
+
+/* ---------------- Networking (peer-to-peer via PeerJS) ----------------
+   The host's browser is the game server: players connect straight to it.
+   Presence-style API: each participant keeps one object; the host relays everyone's. */
+const PFX = "herdmind-v1-";
+const PEER_CFG = Object.assign({ debug: 0 }, window.HERD_PEER_CONFIG || {});
+const ROOM_READY = true;
+function makePeer(id) {
+  return new Promise((res, rej) => {
+    if (!window.Peer) return rej({ code: "nolib" });
+    const p = id ? new Peer(id, PEER_CFG) : new Peer(PEER_CFG);
+    const t = setTimeout(() => { try { p.destroy(); } catch (e) {} rej({ code: "timeout" }); }, 12000);
+    p.on("open", () => { clearTimeout(t); res(p); });
+    p.on("error", (e) => { clearTimeout(t); rej({ code: e.type || "error" }); });
+  });
+}
+function mergeP(cur, patch) { const o = { ...cur }; for (const k in patch) { if (patch[k] === null) delete o[k]; else o[k] = patch[k]; } return o; }
+function safePresence(p) {
+  if (!p || typeof p !== "object" || Array.isArray(p)) return {};
+  let txt; try { txt = JSON.stringify(p); } catch (e) { return {}; }
+  if (txt.length > 4096) return {};
+  const o = {};
+  if (typeof p.name === "string") o.name = clean(p.name, 16);
+  if (typeof p.av === "string" && okAv(p.av)) o.av = p.av;
+  if (p.ans && typeof p.ans === "object") o.ans = { id: String(p.ans.id || ""), k: String(p.ans.k || ""), r: +p.ans.r || 0, i: +p.ans.i };
+  return o; // players can never claim to be the host (no "g")
+}
+/* Backup path: a public MQTT message relay over secure WebSockets. Used when a
+   direct connection can't be made (strict Wi-Fi, mobile data, office networks). */
+const RELAYS = window.HERD_MQTT_URLS || ["wss://broker.emqx.io:8084/mqtt", "wss://broker.hivemq.com:8884/mqtt", "wss://test.mosquitto.org:8081/mqtt"];
+const RTOP = "herdmind/v1/";
+const rid = () => Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 6);
+function relayConnect() {
+  return new Promise((res, rej) => {
+    if (!window.mqtt) return rej({ code: "nolib" });
+    let i = 0;
+    const tryNext = () => {
+      if (i >= RELAYS.length) return rej({ code: "relay-down" });
+      const url = RELAYS[i++];
+      let settled = false;
+      const cli = mqtt.connect(url, { clean: true, connectTimeout: 5000, reconnectPeriod: 0, clientId: "hm_" + rid() });
+      const t = setTimeout(() => { if (!settled) { settled = true; try { cli.end(true); } catch (e) {} tryNext(); } }, 6000);
+      cli.on("connect", () => { if (settled) return; settled = true; clearTimeout(t); cli.options.reconnectPeriod = 2000; res(cli); });
+      cli.on("error", () => { if (settled) return; settled = true; clearTimeout(t); try { cli.end(true); } catch (e) {} tryNext(); });
+    };
+    tryNext();
+  });
+}
+// A relay "connection" that behaves like a PeerJS DataConnection (on/send/open/close/peer).
+function makeLink(id, sendFn, onGone) {
+  const h = { open: [], data: [], close: [], error: [] };
+  let closed = false;
+  const L = {
+    peer: "r-" + id, open: false, via: "relay",
+    on(e, f) { if (h[e]) h[e].push(f); return L; },
+    send(m) { if (L.open) sendFn(m); },
+    close() { if (closed) return; try { sendFn({ t: "bye" }); } catch (e) {} L._close(); },
+    _open() { L.open = true; h.open.forEach(f => f()); },
+    _data(m) { if (!closed) h.data.forEach(f => f(m)); },
+    _close() { if (closed) return; closed = true; L.open = false; onGone && onGone(); h.close.forEach(f => f()); },
+  };
+  return L;
+}
+async function relayHost(code, onConnection) {
+  const cli = await relayConnect();
+  const links = new Map();
+  const sub = () => cli.subscribe(RTOP + code + "/h", { qos: 0 });
+  sub(); cli.on("connect", sub);
+  cli.on("message", (topic, buf) => {
+    let msg; try { msg = JSON.parse(buf.toString()); } catch (e) { return; }
+    const id = String((msg && msg.f) || "");
+    if (!/^[a-z0-9]{8,24}$/.test(id) || !msg.m || typeof msg.m !== "object") return;
+    let L = links.get(id);
+    if (msg.m.t === "bye") { if (L) L._close(); return; }
+    if (!L) {
+      if (links.size > 60) return;
+      L = makeLink(id, (m) => cli.publish(RTOP + code + "/c/" + id, JSON.stringify(m)), () => links.delete(id));
+      links.set(id, L); onConnection(L); L._open();
+    }
+    L._data(msg.m);
+  });
+  return { close() { for (const L of [...links.values()]) L.close(); try { cli.end(true); } catch (e) {} } };
+}
+async function relayClient(code) {
+  const cli = await relayConnect();
+  const id = rid();
+  const L = makeLink(id, (m) => cli.publish(RTOP + code + "/h", JSON.stringify({ f: id, m })), () => { setTimeout(() => { try { cli.end(true); } catch (e) {} }, 300); });
+  cli.on("message", (topic, buf) => { try { L._data(JSON.parse(buf.toString())); } catch (e) {} });
+  await new Promise((res, rej) => cli.subscribe(RTOP + code + "/c/" + id, { qos: 0 }, (err) => err ? rej({ code: "relay-down" }) : res()));
+  cli.on("connect", () => cli.subscribe(RTOP + code + "/c/" + id, { qos: 0 }));
+  L._open();
+  return L;
+}
+// Players: try a direct connection first, fall back to the relay.
+async function connectLink(code) {
+  let peer = null;
+  if (!window.HERD_FORCE_RELAY && window.Peer) {
+    try {
+      peer = await makePeer();
+      const c = await new Promise((res, rej) => {
+        const c = peer.connect(PFX + code, { reliable: true });
+        const t = setTimeout(() => rej({ code: "slow" }), 6000);
+        c.on("open", () => { clearTimeout(t); res(c); });
+        peer.on("error", (e) => { clearTimeout(t); rej({ code: e.type || "error" }); });
+      });
+      c.via = "direct"; c._peer = peer;
+      return c;
+    } catch (e) { try { peer && peer.destroy(); } catch (x) {} }
+  }
+  return relayClient(code); // throws if no relay is reachable
+}
+
+async function hostRoom(code) {
+  // Listen for players both directly (PeerJS) and through the relay.
+  let peer = null, relay = null, peerErr = null;
+  const pc = [], early = (c) => pc.push(c); // connections that arrive before setup finishes
+  let onConnRef = early;
+  try { peer = await makePeer(PFX + code); peer.on("connection", (c) => onConnRef(c)); }
+  catch (e) { if (e && e.code === "unavailable-id") throw e; peerErr = e; peer = null; }
+  try { relay = await relayHost(code, (c) => onConnRef(c)); } catch (e) { relay = null; }
+  if (!peer && !relay) throw (peerErr || { code: "network" });
+  const me = "host", subs = new Set();
+  const conns = new Map();   // peer -> { c, st: "new" | "pending" | "in", seen, p }
+  const pres = new Map([[me, {}]]);
+  const okNames = new Set();  // names the host already let in (rejoining after a drop)
+  let snap = [], pend = [], bt = null;
+  const nameKey = (p) => keyOf((p && p.name) || "");
+  const rebuild = () => {
+    snap = Object.freeze([...pres].map(([id, p]) => Object.freeze({ peer: id, presence: p, isMe: id === me, sameTab: id === me })));
+    pend = Object.freeze([...conns].filter(([, x]) => x.st === "pending").map(([id, x]) => Object.freeze({ peer: id, presence: x.p })));
+    subs.forEach(f => f({ peers: snap }));
+  };
+  const list = () => [...pres].map(([id, p]) => ({ peer: id, presence: p }));
+  const send = (x, m) => { if (x.c.open) { try { x.c.send(m); } catch (e) {} } };
+  const sendAll = () => { const msg = { t: "peers", list: list() }; for (const x of conns.values()) if (x.st === "in") send(x, msg); else if (x.st === "pending") send(x, { t: "wait" }); };
+  const bcast = () => { if (bt) return; bt = setTimeout(() => { bt = null; sendAll(); }, 50); };
+  const nameTaken = (id, k) => k && [...pres].some(([pid, p]) => pid !== id && nameKey(p) === k);
+  const admit = (id) => {
+    const x = conns.get(id); if (!x || x.st === "in") return;
+    if (nameTaken(id, nameKey(x.p))) return refuse(id, "name");
+    x.st = "in"; pres.set(id, x.p); okNames.add(nameKey(x.p)); rebuild(); sendAll();
+  };
+  const refuse = (id, why) => {
+    const x = conns.get(id); if (!x) return;
+    send(x, { t: "deny", why });
+    conns.delete(id); pres.delete(id);
+    if (why === "kick") okNames.delete(nameKey(x.p));
+    setTimeout(() => { try { x.c.close(); } catch (e) {} }, 400);
+    rebuild(); bcast();
+  };
+  const decide = (id) => { // first presence with a name arrives: let in, or ask the host
+    const x = conns.get(id); if (!x || x.st !== "new" || !nameKey(x.p)) return;
+    if (nameTaken(id, nameKey(x.p))) return refuse(id, "name");
+    if (!S.approve || okNames.has(nameKey(x.p))) return admit(id);
+    x.st = "pending"; send(x, { t: "wait" }); rebuild();
+  };
+  const onConn = (c) => {
+    const reg = () => { if (!conns.has(c.peer)) conns.set(c.peer, { c, st: "new", seen: Date.now(), p: {} }); };
+    if (c.open) reg(); else c.on("open", reg);
+    c.on("data", (d) => {
+      const x = conns.get(c.peer);
+      if (!x || !d || d.t !== "p") return;
+      x.seen = Date.now();
+      const np = safePresence(d.p);
+      if (x.st === "in") {
+        if (nameKey(np) !== nameKey(x.p)) np.name = x.p.name; // no renaming once in
+        if (JSON.stringify(np) !== JSON.stringify(pres.get(c.peer))) { x.p = np; pres.set(c.peer, np); rebuild(); bcast(); }
+      } else { x.p = np; decide(c.peer); if (x.st === "pending") rebuild(); }
+    });
+    const gone = () => { if (!conns.has(c.peer)) return; conns.delete(c.peer); pres.delete(c.peer); rebuild(); bcast(); };
+    c.on("close", gone); c.on("error", gone);
+  };
+  onConnRef = onConn; pc.forEach(onConn);
+  if (peer) {
+    peer.on("disconnected", () => { if (!peer.destroyed) try { peer.reconnect(); } catch (e) {} });
+  }
+  setConn(true);
+  const sweep = setInterval(() => { // drop silent connections, send heartbeat + full state
+    const now = Date.now(); let changed = false;
+    for (const [id, x] of conns) if (!x.c.open || now - x.seen > 10000) { try { x.c.close(); } catch (e) {} conns.delete(id); pres.delete(id); changed = true; }
+    if (changed) rebuild();
+    sendAll();
+  }, 2500);
+  rebuild();
+  return {
+    peers: () => snap,
+    pending: () => pend,
+    admit, deny: (id) => refuse(id, "deny"), kick: (id) => refuse(id, "kick"),
+    admitAll: () => [...conns].filter(([, x]) => x.st === "pending").forEach(([id]) => admit(id)),
+    onPeers: (f) => { subs.add(f); setTimeout(() => f({ peers: snap }), 0); return () => subs.delete(f); },
+    presence: async (patch) => { pres.set(me, mergeP(pres.get(me) || {}, patch)); rebuild(); bcast(); },
+    leave: async () => { clearInterval(sweep); subs.clear(); for (const x of conns.values()) { try { x.c.close(); } catch (e) {} } try { peer && peer.destroy(); } catch (e) {} try { relay && relay.close(); } catch (e) {} },
+  };
+}
+async function clientRoom(code, first) {
+  let conn0;
+  try { conn0 = await connectLink(code); }
+  catch (e) { throw { code: e && e.code === "nolib" ? "nolib" : "unreachable" }; }
+  const peer = conn0._peer || null;
+  const me = conn0.via === "direct" ? (peer && peer.id) : conn0.peer, subs = new Set();
+  let snap = [], mine = { ...(first || {}) }, conn, left = false, status = "connecting";
+  const fire = () => subs.forEach(f => f({ peers: snap }));
+  const killAll = () => { try { conn0.close(); } catch (e) {} try { peer && peer.destroy(); } catch (e) {} };
+  await new Promise((res, rej) => {
+    conn = conn0;
+    let done = false;
+    const t = setTimeout(() => { killAll(); rej({ code: "peer-unavailable" }); }, 9000);
+    const ok = () => { if (!done) { done = true; clearTimeout(t); res(); } };
+    conn.on("data", (d) => {
+      if (!d) return;
+      if (d.t === "wait") { status = "pending"; ok(); fire(); }
+      else if (d.t === "deny") {
+        if (!done) { done = true; clearTimeout(t); killAll(); rej({ code: "deny-" + d.why }); return; }
+        status = "denied"; S.denied = d.why || "deny"; fire();
+      }
+      else if (d.t === "peers" && Array.isArray(d.list)) {
+        status = "in";
+        snap = Object.freeze(d.list.map(x => Object.freeze({ peer: String(x.peer), presence: x.presence || {}, isMe: x.peer === me, sameTab: x.peer === me })));
+        ok(); fire();
+      }
+    });
+    try { conn.send({ t: "p", p: mine }); } catch (e) {}
+    conn.on("close", () => { if (!done) { done = true; clearTimeout(t); killAll(); rej({ code: "peer-unavailable" }); } });
+  });
+  let lastMsg = Date.now(), dead = false;
+  conn.on("data", () => { lastMsg = Date.now(); });
+  const lost = () => { if (left || dead || status === "denied") return; dead = true; clearInterval(beat); snap = Object.freeze([]); S.hostGone = true; try { conn.close(); } catch (e) {} fire(); };
+  const beat = setInterval(() => {
+    if (status === "denied") return clearInterval(beat);
+    if (Date.now() - lastMsg > 9000) return lost();
+    if (conn.open) { try { conn.send({ t: "p", p: mine }); } catch (e) {} }
+  }, 2500);
+  conn.on("close", lost); conn.on("error", lost);
+  if (peer) peer.on("disconnected", () => { if (!peer.destroyed) try { peer.reconnect(); } catch (e) {} });
+  return {
+    via: conn0.via,
+    status: () => status,
+    peers: () => snap,
+    onPeers: (f) => { subs.add(f); setTimeout(() => f({ peers: snap }), 0); return () => subs.delete(f); },
+    presence: async (patch) => { mine = mergeP(mine, patch); if (conn.open) { try { conn.send({ t: "p", p: mine }); } catch (e) {} } },
+    leave: async () => { left = true; clearInterval(beat); subs.clear(); try { conn.close(); } catch (e) {} try { peer && peer.destroy(); } catch (e) {} },
+  };
+}
+// Stub lobby: there is no shared "open games" list in this version.
+S.room = { presence: async () => {}, peers: () => [], join: null };
+setTimeout(() => setConn(!!(window.Peer || window.mqtt), !(window.Peer || window.mqtt)), 0);
+
+function setConn(ok, dead) {
+  const p = $("conn");
+  p.textContent = dead ? "offline" : ok ? "ready" : "connecting…";
+  p.style.background = dead ? "#ffd9d2" : ok ? "#c9f2dc" : "var(--card)";
+  $("offline").classList.toggle("hidden", !dead);
+}
+
+function renderOpenGames() {
+  return; // not available in the stand-alone version
+  if (!S.room) return;
+  const box = $("games"); box.replaceChildren();
+  const open = S.room.peers().filter(p => !p.isMe && p.presence && p.presence.open && /^[a-z]{4}$/.test(p.presence.open.code || ""));
+  if (!open.length) { box.append(el("p", "muted small", "No open games right now.")); return; }
+  for (const p of open) {
+    const o = p.presence.open;
+    const b = el("button", "game");
+    const left = el("span"); left.append(el("b", null, o.code.toUpperCase()), document.createTextNode("  · " + clean(o.host, 16) + "'s game"));
+    const right = el("span", "muted small", (o.n || 1) + " playing" + (o.phase && o.phase !== "lobby" ? " · in progress" : ""));
+    b.append(left, right);
+    b.onclick = () => { $("joincode").value = o.code.toUpperCase(); joinGame(o.code, false); };
+    box.append(b);
+  }
+}
+
+/* ---------------- Home actions ---------------- */
+$("name").value = load("herd-name");
+let MY_AV = okAv(load("herd-avatar"));
+(function buildPicker() {
+  const g = $("avgrid");
+  AVATARS.forEach(a => {
+    const b = el("button", a === MY_AV ? "on" : "", a);
+    b.type = "button"; b.setAttribute("aria-label", "Avatar " + a);
+    b.onclick = () => { MY_AV = a; store("herd-avatar", a); g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); if (/avatar/.test($("home-err").textContent)) $("home-err").textContent = ""; };
+    g.append(b);
+  });
+})();
+function needName() {
+  const n = clean($("name").value, 16);
+  if (!n) { $("home-err").textContent = "Enter your name first."; $("name").focus(); return null; }
+  if (!MY_AV) { $("home-err").textContent = "Pick an avatar first."; $("avgrid").scrollIntoView({ block: "center", behavior: "smooth" }); return null; }
+  store("herd-name", n); return n;
+}
+const newCode = () => Array.from({ length: 4 }, () => "abcdefghjkmnpqrstuvwxyz"[Math.floor(Math.random() * 23)]).join("");
+$("btn-create").onclick = () => joinGame(newCode(), true);
+$("btn-join").onclick = () => {
+  const code = $("joincode").value.trim().toLowerCase();
+  if (!/^[a-z]{4}$/.test(code)) { $("home-err").textContent = "Codes are 4 letters."; return; }
+  joinGame(code, false);
+};
+$("joincode").addEventListener("keydown", e => { if (e.key === "Enter") $("btn-join").click(); });
+
+async function joinGame(code, host, preset) {
+  $("home-err").textContent = "";
+  const name = needName(); if (!name) return;
+  if (!window.Peer && !window.mqtt) { $("home-err").textContent = "The game didn't load fully. Check your connection and reload the page."; return; }
+  let g;
+  const btns = [$("btn-create"), $("btn-join")]; btns.forEach(b => b.disabled = true);
+  $("home-err").textContent = host ? "Opening a room…" : "Connecting… this can take up to 15 seconds on some networks.";
+  try {
+    if (host) {
+      for (let tries = 0; ; tries++) {
+        try { g = await hostRoom(code); break; }
+        catch (e) { if (e?.code === "unavailable-id" && tries < 4) { code = newCode(); continue; } throw e; }
+      }
+    } else g = await clientRoom(code, { name, av: MY_AV, ans: null });
+  } catch (e) {
+    btns.forEach(b => b.disabled = false);
+    const c = e?.code;
+    $("home-err").textContent = c === "deny-name" ? "Someone in that game already uses that name. Pick another one."
+      : c === "deny-deny" ? "The host didn't let you in."
+      : c === "deny-kick" ? "The host removed you from that game."
+      : c === "peer-unavailable" ? "No game found with code " + code.toUpperCase() + ". Check the code, or make sure the host's page is still open."
+      : c === "unreachable" || c === "network" || c === "server-error" || c === "socket-error" || c === "timeout" ? "Couldn't reach the game servers from this network. Check your internet, or try another network (e.g. switch between Wi-Fi and mobile data)."
+      : c === "nolib" ? "The game didn't load fully. Reload the page and try again."
+      : "Couldn't connect (" + (c || "error") + "). Try again.";
+    return;
+  }
+  btns.forEach(b => b.disabled = false); $("home-err").textContent = "";
+  S.hostGone = false; S.denied = null;
+  if (!host) {
+    // make sure the name isn't taken by someone else in the room
+    const taken = g.peers().some(p => !p.isMe && p.presence?.name && keyOf(p.presence.name) === keyOf(name));
+    if (taken) { $("home-err").textContent = "Someone in that game already uses that name."; g.leave(); return; }
+  }
+  $("invited").classList.add("hidden"); $("invite-url").classList.add("hidden"); $("invite-msg").textContent = "";
+  S.game = g; S.code = code; S.isHost = host; S.name = name; S.myAns = null; S.seen = {};
+  if (host && preset) applyPreset(preset);
+  if (host) {
+    S.G = { phase: "lobby", r: 0, n: 8, dur: 20, q: "", o: [], c: [], win: [], got: [], sc: {}, host: name };
+    publishHost();
+  }
+  g.presence({ name, av: MY_AV, ans: null });
+  if (host && preset) openWait();
+  S.unsubGame = g.onPeers(onGamePeers, (e) => { alertLost("Lost the game room (" + (e?.code || "error") + ")."); });
+  render();
+}
+
+function leaveGame() {
+  try { S.unsubGame?.(); } catch (e) {}
+  try { S.game?.leave(); } catch (e) {}
+  if (S.isHost && S.room) S.room.presence({ open: null }).catch(() => {});
+  Object.assign(S, { game: null, code: null, isHost: false, G: null, myAns: null, seen: {}, unsubGame: null, fromSaved: null });
+  $("lobby-from").classList.add("hidden");
+  show("home"); renderOpenGames(); renderSaved(); renderRequests();
+}
+function alertLost(msg) { leaveGame(); $("home-err").textContent = msg; }
+$("btn-leave").onclick = leaveGame;
+$("btn-home").onclick = leaveGame;
+
+/* ---------------- Shared view of the game ---------------- */
+function hostPeer() {
+  if (!S.game) return null;
+  if (S.isHost) return { presence: { g: S.G }, isMe: true };
+  // the host is the peer that publishes g; pick the earliest-looking one deterministically
+  const hs = S.game.peers().filter(p => p.presence && p.presence.g && typeof p.presence.g === "object");
+  hs.sort((a, b) => a.peer < b.peer ? -1 : 1);
+  return hs[0] || null;
+}
+function players() {
+  if (!S.game) return [];
+  const seen = new Set(); const out = [];
+  for (const p of S.game.peers()) {
+    const n = p.presence && clean(p.presence.name, 16);
+    if (!n || seen.has(keyOf(n))) continue;
+    seen.add(keyOf(n));
+    out.push({ peer: p.peer, name: n, av: okAv(p.presence.av), ans: p.presence.ans, isMe: p.sameTab, isHost: !!p.presence.g });
+  }
+  return out;
+}
+function currentG() { const h = hostPeer(); return h ? h.presence.g : null; }
+const isAns = (a, G) => !!(a && G && a.r === G.r && a.id === G.id && a.k === G.k);
+
+let lastHostSeenAt = Date.now();
+function onGamePeers() {
+  renderRequests();
+  if (S.isHost) hostCheck();
+  render();
+}
+
+/* ---------------- Rendering ---------------- */
+let tick = null;
+function render() {
+  if (!S.game) { show("home"); return; }
+  if (!S.isHost && S.denied) {
+    const why = S.denied; leaveGame();
+    $("home-err").textContent = why === "kick" ? "The host removed you from the game." : why === "name" ? "Someone in that game already uses that name." : "The host didn't let you in.";
+    return;
+  }
+  if (!S.isHost && S.game.status && S.game.status() === "pending") {
+    show("lobby");
+    $("lobby-code").textContent = S.code.toUpperCase();
+    ["host-settings", "host-wait", "code-card"].forEach(id => $(id).classList.add("hidden"));
+    $("lobby-players").parentElement.classList.add("hidden");
+    $("lobby-wait").classList.remove("hidden");
+    $("lobby-h").textContent = "Almost in…";
+    $("wait-title").textContent = "Asking the host to let you in";
+    $("wait-sub").textContent = "Hang tight. You'll join as soon as the host taps Let in.";
+    return;
+  }
+  $("code-card").classList.remove("hidden"); $("lobby-players").parentElement.classList.remove("hidden");
+  const G = currentG();
+  if (!G) {
+    // no host visible
+    show("lobby");
+    $("lobby-code").textContent = S.code.toUpperCase();
+    $("host-settings").classList.add("hidden"); $("host-wait").classList.add("hidden");
+    $("lobby-wait").classList.remove("hidden");
+    $("lobby-h").textContent = "Waiting room";
+    $("wait-title").textContent = "You're in!";
+    $("wait-title").textContent = S.hostGone ? "The host left" : "You're in!";
+    $("wait-sub").textContent = S.hostGone ? "The host's page was closed or lost its connection. Ask them to host again, then join with the new code." : "Connecting to the host…";
+    renderLobbyPlayers();
+    return;
+  }
+  lastHostSeenAt = Date.now();
+  if (G.phase === "lobby") return renderLobby(G);
+  if (G.phase === "q") return renderQuestion(G);
+  if (G.phase === "reveal") return renderReveal(G);
+  if (G.phase === "final") return renderFinal(G);
+}
+
+function renderLobbyPlayers() {
+  const ps = players();
+  $("lobby-count").textContent = ps.length === 1 ? "1 player" : ps.length + " players";
+  const box = $("lobby-players"); box.replaceChildren();
+  S.shown = S.shown || new Set();
+  ps.forEach(p => { const c = chip(p.name + (p.isMe ? " (you)" : "") + (p.isHost ? " ★" : ""), "", p.av);
+    if (S.isHost && !p.isMe && p.peer && S.game.kick) {
+      const x = el("button", "x", "✕"); x.title = "Remove " + p.name; x.setAttribute("aria-label", "Remove " + p.name);
+      x.onclick = () => { if (x.dataset.armed !== "1") { x.dataset.armed = "1"; x.textContent = "remove?"; setTimeout(() => { x.dataset.armed = ""; x.textContent = "✕"; }, 3000); return; } S.game.kick(p.peer); };
+      c.append(x);
+    } if (!S.shown.has(keyOf(p.name))) { c.classList.add("pop"); S.shown.add(keyOf(p.name)); } box.append(c); });
+}
+function renderLobby(G) {
+  show("lobby");
+  $("lobby-code").textContent = S.code.toUpperCase();
+  const waiting = !!G.wait;
+  const hostName = clean(G.host, 16) || "the host";
+  $("lobby-h").textContent = S.isHost && !waiting ? "Set up your game" : "Waiting room";
+  $("host-settings").classList.toggle("hidden", !S.isHost || waiting);
+  $("host-wait").classList.toggle("hidden", !S.isHost || !waiting);
+  $("lobby-wait").classList.toggle("hidden", S.isHost);
+  if (!S.isHost) {
+    $("wait-title").textContent = waiting ? "You're in! Get ready…" : "You're in!";
+    $("wait-sub").textContent = waiting ? "Waiting for " + hostName + " to start the game." : hostName + " is still setting up the game.";
+  } else if (waiting) {
+    const ps = players();
+    $("wait-summary").textContent = clean(G.sum, 80);
+    $("wait-hint").textContent = ps.length <= 1 ? "Share the code or invite link. Players show up below as they join." : ps.length + " players are here. Start when everyone's in.";
+  }
+  renderLobbyPlayers();
+}
+
+function renderQuestion(G) {
+  show("question");
+  if (!S.seen[G.k]) S.seen[G.k] = Date.now();
+  if (S.myAns && !isAns(S.myAns, G)) { S.myAns = null; S.game.presence({ ans: null }); }
+  $("q-round").textContent = "Round " + G.r + "/" + G.n;
+  $("q-text").textContent = clean(G.q, 160);
+  const box = $("q-opts");
+  const sig = G.k + "|" + (S.myAns ? S.myAns.i : "-") + (timeUp(G) ? "|up" : "");
+  if (box.dataset.sig !== sig) {
+    box.dataset.sig = sig; box.replaceChildren();
+    (G.o || []).forEach((txt, i) => {
+      const b = el("button", "opt pop");
+      b.style.background = OPT_COLORS[i % 4];
+      b.append(el("span", "k", "ABCD"[i]), el("span", null, clean(txt, 48)));
+      if (S.myAns) { b.disabled = true; b.classList.add(S.myAns.i === i ? "picked" : "dim"); }
+      else if (timeUp(G)) { b.disabled = true; b.classList.add("dim"); }
+      b.onclick = () => answer(G.r, i);
+      box.append(b);
+    });
+  }
+  const ps = players();
+  const done = ps.filter(p => isAns(p.ans, G));
+  const up = timeUp(G);
+  let st = done.length + " of " + ps.length + " answered";
+  if (S.isHost && ps.length && done.length >= ps.length) st = "Everyone answered! Tap Show results";
+  else if (up) st = S.isHost ? "Time's up. Tap Show results" : "Time's up. Waiting for the host…";
+  else if (!S.isHost && S.myAns) st += " · waiting for the host";
+  $("q-status").textContent = st;
+  const pb = $("q-players"); pb.replaceChildren();
+  ps.forEach(p => pb.append(chip(p.name + (p.isMe ? " (you)" : ""), isAns(p.ans, G) ? "done" : "wait", p.av)));
+  $("btn-force").classList.toggle("hidden", !S.isHost);
+  hostbar("q-hostbar", G);
+  startTick(G);
+}
+function startTick(G) {
+  clearInterval(tick);
+  const upd = () => {
+    const g = currentG(); if (!g || g.phase !== "q") { clearInterval(tick); return; }
+    const t0 = S.isHost ? S.hostT0 : S.seen[g.k];
+    $("q-bar").parentElement.classList.toggle("hidden", !g.dur);
+    if (!g.dur) { $("q-left").textContent = "no timer"; clearInterval(tick); return; }
+    const left = Math.max(0, g.dur * 1000 - (Date.now() - t0));
+    $("q-left").textContent = left ? Math.ceil(left / 1000) + "s" : "time's up";
+    $("q-bar").style.width = (100 * left / (g.dur * 1000)) + "%";
+    if (!left) {
+      clearInterval(tick);
+      if (!S.timedOut[g.k]) { S.timedOut[g.k] = true; render(); }
+    }
+  };
+  upd(); tick = setInterval(upd, 250);
+}
+function timeUp(G) { return !!(G && G.dur && S.timedOut[G.k]); }
+function answer(r, i) {
+  const G = currentG();
+  if (!G || G.phase !== "q" || G.r !== r || S.myAns || timeUp(G)) return;
+  S.myAns = { id: G.id, k: G.k, r, i };
+  S.game.presence({ ans: S.myAns });
+  render();
+}
+
+function renderBoard(box, G, highlight) {
+  box.replaceChildren();
+  const ps = players();
+  const names = new Map();
+  Object.keys(G.sc || {}).forEach(k => names.set(k, k));
+  ps.forEach(p => names.set(keyOf(p.name), p.name));
+  const avs = Object.assign({}, G.av || {}); ps.forEach(p => { if (p.av) avs[keyOf(p.name)] = p.av; });
+  const rows = [...names.entries()].map(([k, n]) => ({ k, n, a: okAv(avs[k]), s: (G.sc || {})[k] || 0 }))
+    .sort((a, b) => b.s - a.s || a.n.localeCompare(b.n));
+  const got = new Set(G.got || []);
+  rows.forEach((row, idx) => {
+    const r = el("div", "brow" + (row.k === keyOf(S.name) ? " me" : ""));
+    r.append(el("span", "pos", String(idx + 1)), el("span", "ava", row.a || "·"), el("span", "nm", row.n));
+    if (highlight && got.has(row.k)) r.append(el("span", "plus", "+100"));
+    r.append(el("span", "pts", String(row.s)));
+    box.append(r);
+  });
+  return rows;
+}
+
+function renderReveal(G) {
+  show("reveal");
+  clearInterval(tick);
+  $("r-round").textContent = "Round " + G.r + "/" + G.n;
+  $("r-text").textContent = clean(G.q, 160);
+  const counts = G.c || []; const total = counts.reduce((a, b) => a + b, 0) || 1;
+  const win = new Set(G.win || []);
+  const box = $("r-bars");
+  const sig = "r" + G.k;
+  if (box.dataset.sig !== sig) {
+    box.dataset.sig = sig; box.replaceChildren();
+    (G.o || []).forEach((txt, i) => {
+      const bar = el("div", "bar " + (win.has(i) ? "win" : "lose"));
+      const fill = el("div", "fill"); fill.style.background = OPT_COLORS[i % 4]; fill.style.width = "0%";
+      const lbl = el("div", "lbl");
+      const t = el("span");
+      if (win.has(i)) t.append(el("span", "crown", "👑"));
+      t.append(document.createTextNode(clean(txt, 48)));
+      if (isAns(S.myAns, G) && S.myAns.i === i) t.append(el("span", "muted small", "  ← you"));
+      lbl.append(t, el("span", "n", String(counts[i] || 0)));
+      bar.append(fill, lbl); box.append(bar);
+      requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.width = (100 * (counts[i] || 0) / total) + "%"; }));
+    });
+  }
+  const v = $("r-verdict");
+  const mine = isAns(S.myAns, G) ? S.myAns.i : null;
+  if (!win.size) { v.className = "verdict meh"; v.textContent = (counts.some(x => x) ? "Total split — no herd this time" : "Nobody answered"); }
+  else if (mine == null) { v.className = "verdict meh"; v.textContent = "You didn't answer"; }
+  else if (win.has(mine)) { v.className = "verdict yes"; v.textContent = "You're one of the herd! +100"; }
+  else { v.className = "verdict no"; v.textContent = "Lone wolf. No points."; }
+  renderBoard($("r-board"), G, true);
+  $("btn-next").classList.toggle("hidden", !S.isHost);
+  $("btn-next").textContent = G.r >= G.n ? "See final results" : "Next question";
+  $("r-wait").classList.toggle("hidden", S.isHost);
+  hostbar("r-hostbar", G);
+}
+
+function renderFinal(G) {
+  show("final");
+  clearInterval(tick);
+  const rows = renderBoard($("f-board"), G, false);
+  const pod = $("podium"); pod.replaceChildren();
+  const order = [1, 0, 2]; const heights = [110, 80, 60];
+  order.forEach(pos => {
+    const row = rows[pos]; if (!row) return;
+    const d = el("div", "pod");
+    d.append(el("div", "face", row.a || "🙂"), el("div", "who", row.n), el("div", "sc", row.s + " pts"));
+    const blk = el("div", "blk", String(pos + 1));
+    blk.style.height = heights[pos] + "px"; blk.style.background = ["var(--b)", "var(--c)", "var(--a)"][pos];
+    d.append(blk); pod.append(d);
+  });
+  $("btn-again").classList.toggle("hidden", !S.isHost);
+  $("f-early").classList.toggle("hidden", !G.ended);
+  $("f-early").textContent = G.ended ? "Game ended early after " + G.ended + " of " + G.n + " questions." : "";
+}
+
+/* ---------------- Host logic ---------------- */
+function setTabs(tabsId, wrapId, src) {
+  document.querySelectorAll("#" + tabsId + " button").forEach(x => x.classList.toggle("on", x.dataset.src === src));
+  $(wrapId).classList.toggle("hidden", src === "bank");
+}
+document.querySelectorAll("#src-tabs button").forEach(b => b.onclick = () => { S.src = b.dataset.src; setTabs("src-tabs", "custom-wrap", S.src); });
+$("custom").value = load("herd-custom");
+
+function parseCustom(text) {
+  const out = [];
+  for (const line of (text ?? $("custom").value).split("\n")) {
+    const parts = line.split("|").map(s => clean(s, 48)).filter(Boolean);
+    if (parts.length >= 3) out.push([clean(line.split("|")[0], 140), parts.slice(1, 5)]);
+  }
+  return out;
+}
+
+function publishHost() {
+  if (!S.isHost || !S.game) return;
+  const G = S.G;
+  G.av = G.av || {};
+  players().forEach(p => { if (p.av) G.av[keyOf(p.name)] = p.av; });
+  if (Object.keys(G.av).length > 40) G.av = Object.fromEntries(Object.entries(G.av).slice(-40));
+  S.game.presence({ g: G }).catch(e => { if (e?.code === "invalid_argument") { trimScores(); S.game.presence({ g: S.G }).catch(() => {}); } });
+  S.room?.presence({ open: { code: S.code, host: S.name, n: players().length || 1, phase: G.phase } }).catch(() => {});
+}
+function trimScores() {
+  const ent = Object.entries(S.G.sc).sort((a, b) => b[1] - a[1]).slice(0, 40);
+  S.G.sc = Object.fromEntries(ent);
+}
+
+function buildDeck() {
+  $("lobby-err").textContent = "";
+  const n = +$("set-rounds").value, dur = +$("set-time").value;
+  let deck = [];
+  const mine = parseCustom();
+  if (S.src !== "bank") {
+    if (!S.fromSaved) store("herd-custom", $("custom").value);
+    if (!mine.length) { $("lobby-err").textContent = "Add at least one question in the format: Question | A | B"; return null; }
+  }
+  if (S.src === "custom") deck = shuffle(mine);
+  else if (S.src === "mix") deck = shuffle(mine.concat(shuffle(BANK).slice(0, Math.max(0, n - mine.length))));
+  else deck = shuffle(BANK);
+  return { deck, n, dur };
+}
+function openWait() {
+  const b = buildDeck(); if (!b) return false;
+  const rounds = Math.min(b.n, b.deck.length);
+  const src = S.src === "bank" ? "built-in questions" : S.src === "mix" ? "your questions + built-in" : "your questions";
+  const name = S.fromSaved ? clean(S.fromSaved.name, 40) + " · " : "";
+  S.G.wait = true;
+  S.G.sum = name + rounds + " rounds · " + (b.dur ? b.dur + "s each" : "no timer") + " · " + src;
+  publishHost(); render(); window.scrollTo(0, 0);
+  return true;
+}
+$("btn-open").onclick = () => openWait();
+$("btn-settings").onclick = () => { if (!S.isHost) return; S.G.wait = false; publishHost(); render(); };
+$("btn-start").onclick = () => {
+  const b = buildDeck(); if (!b) { S.G.wait = false; publishHost(); render(); return; }
+  const { deck, n, dur } = b;
+  S.deck = deck; S.hist = {};
+  S.G = { id: Math.random().toString(36).slice(2, 8), phase: "lobby", r: 0, n: Math.min(n, deck.length), dur, q: "", o: [], c: [], win: [], got: [], sc: {}, host: S.name };
+  players().forEach(p => S.G.sc[keyOf(p.name)] = 0);
+  nextRound();
+};
+
+function nextRound() {
+  const G = S.G;
+  if (G.r >= G.n) { G.phase = "final"; G.got = []; G.ended = 0; publishHost(); render(); return; }
+  askRound(G.r + 1);
+}
+function askRound(r) {
+  const G = S.G;
+  // undo any points already given for round r and later
+  for (const rr of Object.keys(S.hist).map(Number)) {
+    if (rr >= r) { (S.hist[rr] || []).forEach(k => { if (k in G.sc) G.sc[k] = Math.max(0, G.sc[k] - 100); }); delete S.hist[rr]; }
+  }
+  const [q, o] = S.deck[r - 1];
+  G.r = r; G.k = Math.random().toString(36).slice(2, 8);
+  G.phase = "q"; G.q = clean(q, 140); G.o = o.slice(0, 4).map(x => clean(x, 48));
+  G.c = []; G.win = []; G.got = [];
+  S.hostT0 = Date.now();
+  publishHost(); render(); window.scrollTo(0, 0);
+}
+function endGame() {
+  const G = S.G; if (!G || (G.phase !== "q" && G.phase !== "reveal")) return;
+  const played = G.phase === "reveal" ? G.r : G.r - 1;
+  Object.assign(G, { phase: "final", got: [], ended: played });
+  publishHost(); render(); window.scrollTo(0, 0);
+}
+function hostbar(id, G) {
+  const bar = $(id);
+  bar.classList.toggle("hidden", !S.isHost);
+  if (!S.isHost) return;
+  const [back, end] = bar.querySelectorAll("button");
+  back.disabled = G.r <= 1;
+  if (!bar.dataset.wired) {
+    bar.dataset.wired = "1";
+    back.onclick = () => { if (S.isHost && S.G.r > 1) askRound(S.G.r - 1); };
+    end.onclick = () => {
+      if (end.dataset.armed !== "1") {
+        end.dataset.armed = "1"; end.textContent = "Tap again to end"; end.classList.add("armed");
+        setTimeout(() => { end.dataset.armed = ""; end.textContent = "End game"; end.classList.remove("armed"); }, 3000);
+        return;
+      }
+      end.dataset.armed = ""; end.textContent = "End game"; end.classList.remove("armed");
+      endGame();
+    };
+  }
+}
+
+function hostCheck() {
+  const G = S.G; if (!G || G.phase !== "q") return;
+  const ps = players();
+  const done = ps.filter(p => isAns(p.ans, G));
+  // The host always moves the game forward by tapping; nothing advances on its own.
+}
+
+function reveal() {
+  const G = S.G; if (G.phase !== "q") return;
+  const ps = players();
+  const counts = G.o.map(() => 0);
+  const picks = [];
+  for (const p of ps) {
+    const a = p.ans;
+    if (isAns(a, G) && Number.isInteger(a.i) && a.i >= 0 && a.i < counts.length) { counts[a.i]++; picks.push([keyOf(p.name), a.i]); }
+  }
+  const max = Math.max(0, ...counts);
+  let win = max > 0 ? counts.map((c, i) => c === max ? i : -1).filter(i => i >= 0) : [];
+  const chosen = counts.filter(c => c > 0).length;
+  if (chosen > 1 && win.length === chosen) win = []; // total split: nobody scores
+  const got = picks.filter(([, i]) => win.includes(i)).map(([k]) => k);
+  for (const [k] of picks) if (!(k in G.sc)) G.sc[k] = 0;
+  got.forEach(k => G.sc[k] = (G.sc[k] || 0) + 100);
+  S.hist[G.r] = got;
+  Object.assign(G, { phase: "reveal", c: counts, win, got });
+  publishHost(); render();
+}
+
+$("btn-force").onclick = () => { if (S.isHost) reveal(); };
+$("btn-next").onclick = () => { if (S.isHost) nextRound(); };
+$("btn-again").onclick = () => {
+  if (!S.isHost) return;
+  S.G = { phase: "lobby", r: 0, n: 8, dur: 20, q: "", o: [], c: [], win: [], got: [], sc: {}, host: S.name };
+  S.myAns = null; S.game.presence({ ans: null });
+  publishHost(); render();
+};
+
+/* ---------------- Importing questions from a file ---------------- */
+function parseCSV(text, sep) {
+  const rows = []; let row = [], cur = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === sep) { row.push(cur); cur = ""; }
+    else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[i + 1] === "\n") i++; row.push(cur); rows.push(row); row = []; cur = ""; }
+    else cur += ch;
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  return rows;
+}
+function rowsToLines(rows) {
+  const lines = [];
+  for (const r of rows) {
+    const cells = r.map(c => clean(String(c ?? "").replace(/\|/g, "/"), 140)).filter(Boolean);
+    if (cells.length < 3) continue;
+    if (/^(question|שאלה)s?$/i.test(cells[0])) continue; // header row
+    lines.push([cells[0], ...cells.slice(1, 5).map(c => c.slice(0, 48))].join(" | "));
+  }
+  return lines;
+}
+let xlsxLoading = null;
+function loadXLSX() {
+  if (window.XLSX) return Promise.resolve();
+  if (!xlsxLoading) xlsxLoading = new Promise((ok, bad) => {
+    const sc = document.createElement("script");
+    sc.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    sc.onload = ok; sc.onerror = () => { xlsxLoading = null; bad(new Error("load")); };
+    document.head.append(sc);
+  });
+  return xlsxLoading;
+}
+async function fileToLines(file) {
+  const nm = file.name.toLowerCase();
+  if (/\.(xlsx|xls)$/.test(nm)) {
+    await loadXLSX();
+    const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    return rowsToLines(XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" }));
+  }
+  const text = (await file.text()).replace(/^﻿/, "");
+  const sample = text.split(/\r?\n/).filter(l => l.trim()).slice(0, 10).join("\n");
+  if (sample.includes("|")) return text.split(/\r?\n/).map(l => l.trim()).filter(l => l.split("|").filter(x => x.trim()).length >= 3);
+  const sep = sample.includes("\t") ? "\t" : (sample.split(";").length > sample.split(",").length ? ";" : ",");
+  return rowsToLines(parseCSV(text, sep));
+}
+function wireFile(inputId, textareaId, msgId, errId) {
+  $(inputId).onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    $(msgId).textContent = ""; $(errId).textContent = "";
+    try {
+      const lines = await fileToLines(f);
+      if (!lines.length) { $(errId).textContent = "No questions found in " + f.name + ". Use one per line: Question | A | B"; return; }
+      const ta = $(textareaId);
+      ta.value = (ta.value.trim() ? ta.value.trim() + "\n" : "") + lines.join("\n");
+      $(msgId).textContent = "Added " + lines.length + " question" + (lines.length === 1 ? "" : "s") + " from " + f.name;
+    } catch (err) {
+      $(errId).textContent = "Couldn't read that file. Try saving it as .csv or .txt.";
+    }
+  };
+}
+wireFile("lobby-file", "custom", "lobby-file-msg", "lobby-err");
+wireFile("ed-file", "ed-custom", "ed-file-msg", "ed-err");
+
+/* ---------------- Saved games (host later) ---------------- */
+const SV = { db: null, col: null, list: [], local: false, ready: false, editId: null, src: "custom" };
+function localList() { try { return JSON.parse(localStorage.getItem("herd-games") || "[]"); } catch (e) { return []; } }
+function localSave(list) { try { localStorage.setItem("herd-games", JSON.stringify(list)); return true; } catch (e) { return false; } }
+function useLocal() {
+  SV.local = true; SV.ready = true; SV.list = localList(); renderSaved();
+}
+(async () => {
+  const timer = setTimeout(() => { if (!SV.ready) useLocal(); }, 10000);
+  try {
+    const [db, user] = await Promise.all([window.claude?.use?.("db"), window.claude?.use?.("user")]);
+    const uid = user ? await user.id() : null;
+    if (!db || !uid) { clearTimeout(timer); useLocal(); return; }
+    SV.db = db;
+    SV.col = db.doc("data/users/" + uid + "/profile").collection("games");
+    SV.col.onSnapshot(snap => {
+      clearTimeout(timer); SV.ready = true; SV.local = false;
+      SV.list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderSaved();
+    }, () => { clearTimeout(timer); useLocal(); });
+  } catch (e) { clearTimeout(timer); useLocal(); }
+})();
+
+function renderSaved() {
+  const box = $("saved"); box.replaceChildren();
+  if (!SV.ready) { box.append(el("p", "muted small", "Loading…")); return; }
+  const list = SV.list.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (!list.length) box.append(el("p", "muted small", "No saved games yet. Create one now and host it whenever you're ready."));
+  for (const g of list) {
+    const d = el("div", "sg");
+    const nq = Array.isArray(g.questions) ? g.questions.length : 0;
+    const src = g.src === "bank" ? "built-in questions" : g.src === "mix" ? nq + " of yours + built-in" : nq + " questions";
+    d.append(el("div", "t", clean(g.name, 40) || "Untitled game"), el("div", "muted small", (g.src === "custom" ? Math.min(g.rounds || 8, nq) : (g.rounds || 8)) + " rounds · " + (g.dur === 0 ? "no timer" : (g.dur || 20) + "s") + " · " + src));
+    const acts = el("div", "acts");
+    const host = el("button", "go", "Host now"); host.onclick = () => hostSaved(g);
+    const edit = el("button", null, "Edit"); edit.onclick = () => openEditor(g);
+    const del = el("button", null, "Delete");
+    del.onclick = async () => {
+      if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Tap to confirm"; setTimeout(() => { del.dataset.armed = ""; del.textContent = "Delete"; }, 3000); return; }
+      await removeGame(g.id);
+    };
+    acts.append(host, edit, del); d.append(acts); box.append(d);
+  }
+  if (SV.local) box.append(el("p", "muted small", "Saved on this device only."));
+}
+
+function openEditor(g) {
+  SV.editId = g ? g.id : null;
+  $("ed-title").textContent = g ? "Edit game" : "Create a game";
+  $("ed-name").value = g ? clean(g.name, 40) : "";
+  $("ed-rounds").value = String(g?.rounds || 8);
+  $("ed-time").value = String(g?.dur ?? 20);
+  SV.src = g?.src || "custom"; setTabs("ed-tabs", "ed-custom-wrap", SV.src);
+  $("ed-custom").value = g && Array.isArray(g.questions) ? g.questions.map(([q, o]) => [q, ...o].join(" | ")).join("\n") : "";
+  $("ed-err").textContent = ""; $("ed-file-msg").textContent = "";
+  show("edit"); window.scrollTo(0, 0);
+}
+document.querySelectorAll("#ed-tabs button").forEach(b => b.onclick = () => { SV.src = b.dataset.src; setTabs("ed-tabs", "ed-custom-wrap", SV.src); });
+$("btn-new").onclick = () => openEditor(null);
+$("ed-cancel").onclick = () => { show("home"); renderSaved(); };
+
+$("ed-save").onclick = async () => {
+  $("ed-err").textContent = "";
+  const name = clean($("ed-name").value, 40);
+  if (!name) { $("ed-err").textContent = "Give the game a name."; $("ed-name").focus(); return; }
+  const questions = SV.src === "bank" ? [] : parseCustom($("ed-custom").value).slice(0, 200);
+  if (SV.src !== "bank" && !questions.length) { $("ed-err").textContent = "Add at least one question: Question | A | B"; return; }
+  const body = { name, rounds: +$("ed-rounds").value, dur: +$("ed-time").value, src: SV.src, questions, updatedAt: Date.now() };
+  const btn = $("ed-save"); btn.disabled = true; btn.textContent = "Saving…";
+  try {
+    await saveGame(SV.editId, body);
+    show("home"); renderSaved(); window.scrollTo(0, 0);
+  } catch (e) {
+    $("ed-err").textContent = e?.code === "quota_exceeded" ? "Storage is full. Delete an old game first." : "Couldn't save. Try again.";
+  } finally { btn.disabled = false; btn.textContent = "Save game"; }
+};
+
+async function saveGame(id, body) {
+  if (!SV.local && SV.col) {
+    try { await (id ? SV.col.doc(id) : SV.col.doc()).set(body); return; }
+    catch (e) { if (e?.code === "quota_exceeded") throw e; useLocal(); }
+  }
+  const list = localList();
+  const nid = id || "g" + Date.now().toString(36);
+  const i = list.findIndex(x => x.id === nid);
+  if (i >= 0) list[i] = { id: nid, ...body }; else list.push({ id: nid, ...body });
+  if (!localSave(list)) throw new Error("local");
+  SV.list = list;
+}
+async function removeGame(id) {
+  if (!SV.local && SV.col) { try { await SV.col.doc(id).delete(); return; } catch (e) {} }
+  const list = localList().filter(x => x.id !== id); localSave(list); SV.list = list; renderSaved();
+}
+
+function applyPreset(g) {
+  S.fromSaved = g;
+  $("set-rounds").value = [...$("set-rounds").options].some(o => o.value == g.rounds) ? String(g.rounds) : (() => { const o = new Option(String(g.rounds)); $("set-rounds").add(o); return String(g.rounds); })();
+  $("set-time").value = String(g.dur ?? 20);
+  S.src = g.src || "custom"; setTabs("src-tabs", "custom-wrap", S.src);
+  $("custom").value = Array.isArray(g.questions) ? g.questions.map(([q, o]) => [q, ...o].join(" | ")).join("\n") : "";
+  $("lobby-from").textContent = "Using your saved game “" + clean(g.name, 40) + "”. You can still change anything before starting.";
+  $("lobby-from").classList.remove("hidden");
+}
+function hostSaved(g) {
+  if (!needName()) { window.scrollTo(0, 0); return; }
+  joinGame(newCode(), true, g);
+}
+
+/* ---------------- Invite links ---------------- */
+const PAGE_URL = location.href.split("#")[0];
+const inviteLink = () => PAGE_URL + "#join-" + S.code;
+$("btn-invite").onclick = () => {
+  if (location.protocol === "file:") {
+    $("invite-url").classList.add("hidden");
+    $("invite-msg").innerHTML = "";
+    $("invite-msg").append(el("b", null, "This game is opened from a file on your computer, so a link to it won't work on anyone else's phone. "),
+      document.createTextNode("Put index.html online first (for example by dragging its folder onto app.netlify.com/drop), open the address you get, and host from there."));
+    $("invite-msg").style.color = "var(--bad)";
+    return;
+  }
+  $("invite-msg").style.color = "";
+  const link = inviteLink();
+  const box = $("invite-url"); box.value = link; box.classList.remove("hidden");
+  const done = (ok) => {
+    $("invite-msg").textContent = ok ? "Link copied! Paste it in WhatsApp or anywhere. Anyone with the link can join."
+      : "Copy the link above and send it to your friends.";
+    if (!ok) { box.focus(); box.select(); }
+  };
+  try { navigator.clipboard.writeText(link).then(() => done(true), () => done(false)); } catch (e) { done(false); }
+};
+function readInvite() {
+  const m = /^#join-([a-z]{4})$/.exec(location.hash || "");
+  if (!m || S.game) return;
+  $("joincode").value = m[1].toUpperCase();
+  const box = $("invited");
+  box.textContent = "You're invited to room " + m[1].toUpperCase() + ". Enter your name and tap Join.";
+  box.classList.remove("hidden");
+  if (!$("name").value) $("name").focus();
+}
+readInvite();
+window.addEventListener("hashchange", readInvite);
+
+/* ---------------- Join approval (host) ---------------- */
+S.approve = load("herd-approve") !== "0";
+$("set-approve").checked = $("wait-approve").checked = S.approve;
+function setApprove(v) {
+  S.approve = v; store("herd-approve", v ? "1" : "0");
+  $("set-approve").checked = $("wait-approve").checked = v;
+  if (!v && S.isHost && S.game && S.game.admitAll) S.game.admitAll();
+}
+$("set-approve").onchange = (e) => setApprove(e.target.checked);
+$("wait-approve").onchange = (e) => setApprove(e.target.checked);
+function renderRequests() {
+  const pend = S.isHost && S.game && S.game.pending ? S.game.pending() : [];
+  $("reqs").classList.toggle("hidden", !pend.length);
+  document.body.classList.toggle("has-reqs", !!pend.length);
+  if (!pend.length) return;
+  $("reqs-title").textContent = pend.length === 1 ? "Someone wants to join" : pend.length + " people want to join";
+  const box = $("reqs-list"); box.replaceChildren();
+  pend.forEach(q => {
+    const r = el("div", "req");
+    const who = el("span", "who"); who.append(el("span", null, okAv(q.presence.av) || "🙂"), el("span", null, clean(q.presence.name, 16) || "Someone"));
+    const yes = el("button", "yes", "Let in"); yes.onclick = () => S.game.admit(q.peer);
+    const no = el("button", "no", "Decline"); no.onclick = () => S.game.deny(q.peer);
+    r.append(who, yes, no); box.append(r);
+  });
+  if (pend.length > 1) { const all = el("button", "all", "Let everyone in"); all.onclick = () => S.game.admitAll(); box.append(all); }
+}
+
+// Re-render players periodically so stale "no host" status updates
+setInterval(() => { if (S.game && !currentG()) render(); }, 2000);
+</script>
+</body>
+</html>
