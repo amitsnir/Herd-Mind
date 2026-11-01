@@ -953,6 +953,7 @@ async function joinGame(code, host, preset) {
   $("invited").classList.add("hidden"); $("invite-url").classList.add("hidden"); $("invite-msg").textContent = "";
   S.game = g; S.code = code; S.isHost = host; S.name = name; S.myAns = null; S.seen = {};
   if (host && preset) applyPreset(preset);
+  else if (host) { clearBox("custom", "lobby-file-msg"); S.fromSaved = null; $("lobby-from").classList.add("hidden"); setTabs("src-tabs", "custom-wrap", S.src); }
   if (host) {
     S.G = { phase: "lobby", r: 0, n: 8, dur: 20, q: "", o: [], c: [], win: [], got: [], sc: {}, host: name };
     publishHost();
@@ -1241,8 +1242,15 @@ function setTabs(tabsId, wrapId, src) {
 }
 $("custom").addEventListener("input", () => updateCount("src-tabs"));
 $("ed-custom").addEventListener("input", () => updateCount("ed-tabs"));
-document.querySelectorAll("#src-tabs button").forEach(b => b.onclick = () => { S.src = b.dataset.src; setTabs("src-tabs", "custom-wrap", S.src); });
-$("custom").value = load("herd-custom");
+// Switching to "Mine only" starts with an empty box
+function clearBox(ta, msg) { $(ta).value = ""; if ($(msg)) $(msg).textContent = ""; }
+document.querySelectorAll("#src-tabs button").forEach(b => b.onclick = () => {
+  const was = normSrc(S.src); S.src = b.dataset.src;
+  if (S.src === "custom" && was !== "custom") { clearBox("custom", "lobby-file-msg"); S.fromSaved = null; $("lobby-from").classList.add("hidden"); }
+  setTabs("src-tabs", "custom-wrap", S.src);
+});
+$("custom").value = ""; // start empty: questions from earlier sessions are never brought back
+try { localStorage.removeItem("herd-custom"); } catch (e) {}
 
 function parseCustom(text) {
   const out = [];
@@ -1273,7 +1281,6 @@ function buildDeck() {
   let deck = [];
   const mine = parseCustom();
   if (S.src !== "bank") {
-    if (!S.fromSaved) store("herd-custom", $("custom").value);
     if (!mine.length) { $("lobby-err").textContent = "Add at least one question in the format: Question | A | B"; return null; }
   }
   if (S.src === "bank") { deck = shuffle(BANK); return { deck, n: Math.min(n, deck.length), dur }; }
@@ -1511,7 +1518,11 @@ function openEditor(g) {
   setTabs("ed-tabs", "ed-custom-wrap", SV.src);
   show("edit"); window.scrollTo(0, 0);
 }
-document.querySelectorAll("#ed-tabs button").forEach(b => b.onclick = () => { SV.src = b.dataset.src; setTabs("ed-tabs", "ed-custom-wrap", SV.src); });
+document.querySelectorAll("#ed-tabs button").forEach(b => b.onclick = () => {
+  const was = normSrc(SV.src); SV.src = b.dataset.src;
+  if (SV.src === "custom" && was !== "custom") clearBox("ed-custom", "ed-file-msg");
+  setTabs("ed-tabs", "ed-custom-wrap", SV.src);
+});
 $("btn-new").onclick = () => openEditor(null);
 $("ed-cancel").onclick = () => { show("home"); renderSaved(); };
 
