@@ -381,8 +381,9 @@
         <button data-src="custom">Mine only</button>
       </div>
       <div id="custom-wrap" class="hidden">
-        <textarea id="custom" placeholder="One per line: Question | Option | Option | Option&#10;Best snack? | Chips | Popcorn | Chocolate | Fruit&#10;Who's always late? | Dan | Maya | Yossi"></textarea>
+        <textarea id="custom" autocomplete="off" placeholder="One per line: Question | Option | Option | Option&#10;Best snack? | Chips | Popcorn | Chocolate | Fruit&#10;Who's always late? | Dan | Maya | Yossi"></textarea>
         <p class="muted small" style="margin-top:6px">2–4 options per question, separated by <b>|</b>. Tip: use your friends' names as options.</p>
+        <button type="button" class="filebtn" id="lobby-clear" style="font:inherit;font-weight:700;font-size:14px">🗑 Clear</button>
         <label class="filebtn">📄 Load questions from a file<input type="file" id="lobby-file" accept=".txt,.csv,.tsv,.xlsx,.xls,text/plain,text/csv"></label>
         <div class="ok" id="lobby-file-msg"></div>
         <p class="small" id="custom-count" style="margin:8px 0 0;font-weight:700"></p>
@@ -432,7 +433,8 @@
         <button data-src="custom" class="on">Mine only</button>
       </div>
       <div id="ed-custom-wrap">
-        <textarea id="ed-custom" style="min-height:180px" placeholder="One per line: Question | Option | Option | Option&#10;Best snack? | Chips | Popcorn | Chocolate | Fruit"></textarea>
+        <textarea id="ed-custom" autocomplete="off" style="min-height:180px" placeholder="One per line: Question | Option | Option | Option&#10;Best snack? | Chips | Popcorn | Chocolate | Fruit"></textarea>
+        <button type="button" class="filebtn" id="ed-clear" style="font:inherit;font-weight:700;font-size:14px">🗑 Clear</button>
         <label class="filebtn">📄 Load questions from a file<input type="file" id="ed-file" accept=".txt,.csv,.tsv,.xlsx,.xls,text/plain,text/csv"></label>
         <div class="ok" id="ed-file-msg"></div>
         <p class="small" id="ed-count" style="margin:8px 0 0;font-weight:700"></p>
@@ -496,6 +498,7 @@
     <div class="gap"></div>
     <button class="btn alt" id="btn-home">Back to start</button>
   </section>
+  <p class="center small" id="ver" style="opacity:.6;margin-top:24px;font-weight:700">Herd Mind · version 11</p>
 </div>
 
 <script>
@@ -683,7 +686,7 @@ function relayHost(code, onConnection) {
       let L = links.get(id);
       if (msg.m.t === "bye") { if (L) L._close(); return; }
       if (!L) {
-        if (links.size > 60) return;
+        if (links.size > 80) return;
         L = makeLink(id, (m) => cli.publish(RTOP + code + "/c/" + id, JSON.stringify(m)), () => links.delete(id));
         links.set(id, L); onConnection(L); L._open();
       }
@@ -796,11 +799,13 @@ async function hostRoom(code) {
     peer.on("disconnected", () => { if (!peer.destroyed) try { peer.reconnect(); } catch (e) {} });
   }
   setConn(true);
-  const sweep = setInterval(() => { // drop silent connections, send heartbeat + full state
+  let beats = 0;
+  const sweep = setInterval(() => { // drop silent connections; light heartbeat, full state every 4th beat
     const now = Date.now(); let changed = false;
     for (const [id, x] of conns) if (!x.c.open || now - x.seen > 10000) { try { x.c.close(); } catch (e) {} conns.delete(id); pres.delete(id); changed = true; }
-    if (changed) rebuild();
-    sendAll();
+    if (changed) { rebuild(); bcast(); }
+    if (++beats % 4 === 0) sendAll();
+    else for (const x of conns.values()) send(x, x.st === "pending" ? { t: "wait" } : { t: "hb" });
   }, 2500);
   rebuild();
   return {
@@ -1242,6 +1247,8 @@ function setTabs(tabsId, wrapId, src) {
 }
 $("custom").addEventListener("input", () => updateCount("src-tabs"));
 $("ed-custom").addEventListener("input", () => updateCount("ed-tabs"));
+$("lobby-clear").onclick = () => { clearBox("custom", "lobby-file-msg"); S.fromSaved = null; $("lobby-from").classList.add("hidden"); updateCount("src-tabs"); $("custom").focus(); };
+$("ed-clear").onclick = () => { clearBox("ed-custom", "ed-file-msg"); updateCount("ed-tabs"); $("ed-custom").focus(); };
 // Switching to "Mine only" starts with an empty box
 function clearBox(ta, msg) { $(ta).value = ""; if ($(msg)) $(msg).textContent = ""; }
 document.querySelectorAll("#src-tabs button").forEach(b => b.onclick = () => {
@@ -1250,6 +1257,8 @@ document.querySelectorAll("#src-tabs button").forEach(b => b.onclick = () => {
   setTabs("src-tabs", "custom-wrap", S.src);
 });
 $("custom").value = ""; // start empty: questions from earlier sessions are never brought back
+// Browsers sometimes refill text boxes after a reload or Back: empty them again whenever the page is shown
+window.addEventListener("pageshow", () => { if (!S.game) clearBox("custom", "lobby-file-msg"); if ($("s-edit").classList.contains("hidden")) clearBox("ed-custom", "ed-file-msg"); });
 try { localStorage.removeItem("herd-custom"); } catch (e) {}
 
 function parseCustom(text) {
@@ -1266,12 +1275,12 @@ function publishHost() {
   const G = S.G;
   G.av = G.av || {};
   players().forEach(p => { if (p.av) G.av[keyOf(p.name)] = p.av; });
-  if (Object.keys(G.av).length > 40) G.av = Object.fromEntries(Object.entries(G.av).slice(-40));
+  if (Object.keys(G.av).length > 60) G.av = Object.fromEntries(Object.entries(G.av).slice(-60));
   S.game.presence({ g: G }).catch(e => { if (e?.code === "invalid_argument") { trimScores(); S.game.presence({ g: S.G }).catch(() => {}); } });
   S.room?.presence({ open: { code: S.code, host: S.name, n: players().length || 1, phase: G.phase } }).catch(() => {});
 }
 function trimScores() {
-  const ent = Object.entries(S.G.sc).sort((a, b) => b[1] - a[1]).slice(0, 40);
+  const ent = Object.entries(S.G.sc).sort((a, b) => b[1] - a[1]).slice(0, 60);
   S.G.sc = Object.fromEntries(ent);
 }
 
