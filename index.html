@@ -136,6 +136,9 @@
   @media (max-width:420px){ body.mood-party .logo{font-size:22px} body.mood-party .logo .sheep{font-size:26px} .pill{font-size:11px;padding:3px 7px} }
   .pill.mood{cursor:pointer;font:inherit;font-size:12px;font-weight:700;color:var(--ink)}
   body.mood-party .pill.mood{background:linear-gradient(90deg,#ff3ea5,#ffe14d,#29e7ff);animation:wave 2.4s ease-in-out infinite}
+  .reconn{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:60;background:var(--b);border:3px solid var(--line);border-radius:99px;padding:8px 16px;font-weight:900;box-shadow:4px 4px 0 var(--line);white-space:nowrap}
+  .reconn .spin{display:inline-block;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
   .hidden{display:none!important}
   .center{text-align:center}
   .linkish{background:none;border:0;font:inherit;font-weight:700;text-decoration:underline;cursor:pointer;color:var(--ink);padding:0}
@@ -290,6 +293,7 @@
 </style>
 </head>
 <body>
+<div class="reconn hidden" id="reconn" role="status"><span class="spin">🐑</span> <span id="reconn-msg">Reconnecting…</span></div>
 <div class="floaters" aria-hidden="true" id="floaters"></div>
 <div class="fx" aria-hidden="true" id="fx"></div>
 <div class="reqs hidden" id="reqs"><div class="reqs-in"><b id="reqs-title">Wants to join</b><div id="reqs-list"></div></div></div>
@@ -340,7 +344,7 @@
       <h2>How scoring works</h2>
       <ul class="rules small">
         <li>Pick the answer you think <b>most players</b> will pick.</li>
-        <li>Everyone on the top answer gets <b>+100</b>. Ties at the top all score.</li>
+        <li>Everyone on the top answer scores, and the faster you picked it the more you get: <b>1st 100 · 2nd 95 · 3rd 90 · everyone else 80</b>. Ties at the top all score.</li>
         <li>If every chosen answer is tied (total split), nobody scores.</li>
       </ul>
     </div>
@@ -498,7 +502,7 @@
     <div class="gap"></div>
     <button class="btn alt" id="btn-home">Back to start</button>
   </section>
-  <p class="center small" id="ver" style="opacity:.6;margin-top:24px;font-weight:700">Herd Mind · version 11</p>
+  <p class="center small" id="ver" style="opacity:.6;margin-top:24px;font-weight:700">Herd Mind · version 13</p>
 </div>
 
 <script>
@@ -772,8 +776,19 @@ async function hostRoom(code) {
     setTimeout(() => { try { x.c.close(); } catch (e) {} }, 400);
     rebuild(); bcast();
   };
+  // A player coming back after their phone slept or switched networks: drop their old, silent connection
+  const replaceGhost = (id, k) => {
+    for (const [oid, ox] of conns) {
+      if (oid === id || ox.st !== "in" || nameKey(ox.p) !== k) continue;
+      if (Date.now() - ox.seen < 4000) return false; // the old one is still alive: a different person with the same name
+      try { ox.c.close(); } catch (e) {}
+      conns.delete(oid); pres.delete(oid);
+    }
+    return true;
+  };
   const decide = (id) => { // first presence with a name arrives: let in, or ask the host
     const x = conns.get(id); if (!x || x.st !== "new" || !nameKey(x.p)) return;
+    if (nameTaken(id, nameKey(x.p)) && okNames.has(nameKey(x.p))) { if (replaceGhost(id, nameKey(x.p))) { rebuild(); return admit(id); } }
     if (nameTaken(id, nameKey(x.p))) return refuse(id, "name");
     if (!S.approve || okNames.has(nameKey(x.p))) return admit(id);
     x.st = "pending"; send(x, { t: "wait" }); rebuild();
@@ -802,7 +817,7 @@ async function hostRoom(code) {
   let beats = 0;
   const sweep = setInterval(() => { // drop silent connections; light heartbeat, full state every 4th beat
     const now = Date.now(); let changed = false;
-    for (const [id, x] of conns) if (!x.c.open || now - x.seen > 10000) { try { x.c.close(); } catch (e) {} conns.delete(id); pres.delete(id); changed = true; }
+    for (const [id, x] of conns) if (!x.c.open || now - x.seen > 25000) { try { x.c.close(); } catch (e) {} conns.delete(id); pres.delete(id); changed = true; }
     if (changed) { rebuild(); bcast(); }
     if (++beats % 4 === 0) sendAll();
     else for (const x of conns.values()) send(x, x.st === "pending" ? { t: "wait" } : { t: "hb" });
@@ -850,10 +865,10 @@ async function clientRoom(code, first) {
   });
   let lastMsg = Date.now(), dead = false;
   conn.on("data", () => { lastMsg = Date.now(); });
-  const lost = () => { if (left || dead || status === "denied") return; dead = true; clearInterval(beat); snap = Object.freeze([]); S.hostGone = true; try { conn.close(); } catch (e) {} fire(); };
+  const lost = () => { if (left || dead || status === "denied") return; dead = true; clearInterval(beat); try { conn.close(); } catch (e) {} setTimeout(() => autoRejoin(), 0); };
   const beat = setInterval(() => {
     if (status === "denied") return clearInterval(beat);
-    if (Date.now() - lastMsg > 9000) return lost();
+    if (Date.now() - lastMsg > 15000) return lost();
     if (conn.open) { try { conn.send({ t: "p", p: mine }); } catch (e) {} }
   }, 2500);
   conn.on("close", lost); conn.on("error", lost);
@@ -864,6 +879,8 @@ async function clientRoom(code, first) {
     peers: () => snap,
     onPeers: (f) => { subs.add(f); setTimeout(() => f({ peers: snap }), 0); return () => subs.delete(f); },
     presence: async (patch) => { mine = mergeP(mine, patch); if (conn.open) { try { conn.send({ t: "p", p: mine }); } catch (e) {} } },
+    stale: () => Date.now() - lastMsg > 6000,
+    forceLost: () => lost(),
     leave: async () => { left = true; clearInterval(beat); subs.clear(); try { conn.close(); } catch (e) {} try { peer && peer.destroy(); } catch (e) {} },
   };
 }
@@ -935,7 +952,7 @@ async function joinGame(code, host, preset) {
         try { g = await hostRoom(code); break; }
         catch (e) { if (e?.code === "unavailable-id" && tries < 4) { code = newCode(); continue; } throw e; }
       }
-    } else g = await clientRoom(code, { name, av: MY_AV, ans: null });
+    } else g = await clientRoom(code, { name, av: MY_AV, ans: S.code === code ? S.myAns : null });
   } catch (e) {
     btns.forEach(b => b.disabled = false);
     const c = e?.code;
@@ -966,10 +983,12 @@ async function joinGame(code, host, preset) {
   g.presence({ name, av: MY_AV, ans: null });
   if (host && preset) openWait();
   S.unsubGame = g.onPeers(onGamePeers, (e) => { alertLost("Lost the game room (" + (e?.code || "error") + ")."); });
+  keepAwake();
   render();
 }
 
 function leaveGame() {
+  S.rejoining = false; $("reconn").classList.add("hidden"); letSleep();
   try { S.unsubGame?.(); } catch (e) {}
   try { S.game?.leave(); } catch (e) {}
   if (S.isHost && S.room) S.room.presence({ open: null }).catch(() => {});
@@ -1005,15 +1024,26 @@ function currentG() { const h = hostPeer(); return h ? h.presence.g : null; }
 const isAns = (a, G) => !!(a && G && a.r === G.r && a.id === G.id && a.k === G.k);
 
 let lastHostSeenAt = Date.now();
+// Host: note when each player's answer to the current question first arrives (sets the scoring order)
+function stampAnswers() {
+  const G = S.G; if (!G || G.phase !== "q") return;
+  const at = (S.ansAt[G.k] = S.ansAt[G.k] || {});
+  for (const p of players()) { const k = keyOf(p.name); if (isAns(p.ans, G) && !(k in at)) at[k] = Date.now(); }
+}
+const ORDER_PTS = [100, 95, 90];
+const ptsFor = (place) => ORDER_PTS[place] ?? 80;
+const placeName = (n) => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th";
 function onGamePeers() {
   renderRequests();
-  if (S.isHost) hostCheck();
+  if (S.isHost) { stampAnswers(); hostCheck(); }
   render();
 }
 
 /* ---------------- Rendering ---------------- */
 let tick = null;
 function render() {
+  $("reconn").classList.toggle("hidden", !S.rejoining);
+  if (S.rejoining) return; // keep the current screen while reconnecting
   if (!S.game) { show("home"); return; }
   if (!S.isHost && S.denied) {
     const why = S.denied; leaveGame();
@@ -1160,7 +1190,7 @@ function renderBoard(box, G, highlight) {
   rows.forEach((row, idx) => {
     const r = el("div", "brow" + (row.k === keyOf(S.name) ? " me" : ""));
     r.append(el("span", "pos", String(idx + 1)), el("span", "ava", row.a || "·"), el("span", "nm", row.n));
-    if (highlight && got.has(row.k)) r.append(el("span", "plus", "+100"));
+    if (highlight && got.has(row.k)) r.append(el("span", "plus", "+" + ((G.pts || {})[row.k] ?? 100) + ((G.got || [])[0] === row.k ? " ⚡" : "")));
     r.append(el("span", "pts", String(row.s)));
     box.append(r);
   });
@@ -1195,7 +1225,12 @@ function renderReveal(G) {
   const mine = isAns(S.myAns, G) ? S.myAns.i : null;
   if (!win.size) { v.className = "verdict meh"; v.textContent = (counts.some(x => x) ? "Total split — no herd this time" : "Nobody answered"); }
   else if (mine == null) { v.className = "verdict meh"; v.textContent = "You didn't answer"; }
-  else if (win.has(mine)) { v.className = "verdict yes"; v.textContent = "🐑 You're one of the herd! +100"; }
+  else if (win.has(mine)) {
+    const k = keyOf(S.name), place = (G.got || []).indexOf(k) + 1, pt = (G.pts || {})[k] ?? 100, sec = (G.secs || {})[k];
+    const medal = place === 1 ? "⚡" : place === 2 ? "🥈" : place === 3 ? "🥉" : "🐑";
+    v.className = "verdict yes";
+    v.textContent = "🐑 You're one of the herd! +" + pt + (place ? "  " + medal + " " + placeName(place) + (sec != null ? " · " + sec + "s" : "") : "");
+  }
   else { v.className = "verdict no"; v.textContent = "🐺 Lone wolf. No points."; }
   if (!S.fx["v" + G.k]) {
     S.fx["v" + G.k] = true;
@@ -1311,7 +1346,7 @@ $("btn-settings").onclick = () => { if (!S.isHost) return; S.G.wait = false; pub
 $("btn-start").onclick = () => {
   const b = buildDeck(); if (!b) { S.G.wait = false; publishHost(); render(); return; }
   const { deck, n, dur } = b;
-  S.deck = deck; S.hist = {};
+  S.deck = deck; S.hist = {}; S.ansAt = {};
   S.G = { id: Math.random().toString(36).slice(2, 8), phase: "lobby", r: 0, n: Math.min(n, deck.length), dur, q: "", o: [], c: [], win: [], got: [], sc: {}, host: S.name };
   players().forEach(p => S.G.sc[keyOf(p.name)] = 0);
   nextRound();
@@ -1326,10 +1361,11 @@ function askRound(r) {
   const G = S.G;
   // undo any points already given for round r and later
   for (const rr of Object.keys(S.hist).map(Number)) {
-    if (rr >= r) { (S.hist[rr] || []).forEach(k => { if (k in G.sc) G.sc[k] = Math.max(0, G.sc[k] - 100); }); delete S.hist[rr]; }
+    if (rr >= r) { const h = S.hist[rr] || {}; Object.keys(h).forEach(k => { if (k in G.sc) G.sc[k] = Math.max(0, G.sc[k] - h[k]); }); delete S.hist[rr]; }
   }
   const [q, o] = S.deck[r - 1];
   G.r = r; G.k = Math.random().toString(36).slice(2, 8);
+  G.pts = {}; G.secs = {}; S.ansAt = S.ansAt || {};
   G.phase = "q"; G.q = clean(q, 140); G.o = shuffle(o.slice(0, 4).map(x => clean(x, 48))); // answers in a new random order each time
   G.c = []; G.win = []; G.got = [];
   S.hostT0 = Date.now();
@@ -1382,11 +1418,16 @@ function reveal() {
   let win = max > 0 ? counts.map((c, i) => c === max ? i : -1).filter(i => i >= 0) : [];
   const chosen = counts.filter(c => c > 0).length;
   if (chosen > 1 && win.length === chosen) win = []; // total split: nobody scores
-  const got = picks.filter(([, i]) => win.includes(i)).map(([k]) => k);
+  stampAnswers();
+  const at = (S.ansAt && S.ansAt[G.k]) || {};
+  // everyone on a winning answer, in the order their answers reached the host
+  const got = picks.filter(([, i]) => win.includes(i)).map(([k]) => k)
+    .sort((a, b) => (at[a] ?? Infinity) - (at[b] ?? Infinity));
   for (const [k] of picks) if (!(k in G.sc)) G.sc[k] = 0;
-  got.forEach(k => G.sc[k] = (G.sc[k] || 0) + 100);
-  S.hist[G.r] = got;
-  Object.assign(G, { phase: "reveal", c: counts, win, got });
+  const pts = {}, secs = {};
+  got.forEach((k, place) => { pts[k] = ptsFor(place); G.sc[k] = (G.sc[k] || 0) + pts[k]; if (at[k]) secs[k] = Math.max(0, Math.round((at[k] - S.hostT0) / 100) / 10); });
+  S.hist[G.r] = pts;
+  Object.assign(G, { phase: "reveal", c: counts, win, got, pts, secs });
   publishHost(); render();
 }
 
@@ -1726,6 +1767,53 @@ $("btn-mood").onclick = () => {
   const next = party() ? "chill" : "party"; setMood(next);
   if (next === "party") confetti(40, ["🎉", "🐑", "✨"]);
 };
+
+/* ---------------- Staying connected on phones ---------------- */
+// Keep the screen on while a game is open (phones otherwise lock and pause the page).
+let wakeLock = null;
+async function keepAwake() {
+  try {
+    if (!S.game || !("wakeLock" in navigator) || document.visibilityState !== "visible" || (wakeLock && !wakeLock.released)) return;
+    wakeLock = await navigator.wakeLock.request("screen");
+  } catch (e) { wakeLock = null; }
+}
+function letSleep() { try { wakeLock && wakeLock.release(); } catch (e) {} wakeLock = null; }
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  keepAwake();
+  // Back from the lock screen or another app: if the link went quiet, reconnect straight away
+  if (S.game && !S.isHost && S.game.stale && S.game.stale() && !S.rejoining) S.game.forceLost();
+});
+document.addEventListener("click", () => keepAwake(), { capture: true });
+
+// A player's connection dropped: rejoin the same room by itself, keeping name, avatar, score and answer.
+async function autoRejoin() {
+  if (S.rejoining || S.isHost || !S.code) return;
+  const code = S.code, name = S.name;
+  S.rejoining = true; render();
+  const old = S.game;
+  try { S.unsubGame && S.unsubGame(); } catch (e) {}
+  try { old && old.leave(); } catch (e) {}
+  const until = Date.now() + 45000;
+  for (let i = 0; Date.now() < until && S.code === code; i++) {
+    $("reconn-msg").textContent = i ? "Reconnecting… (try " + (i + 1) + ")" : "Reconnecting…";
+    try {
+      const g = await clientRoom(code, { name, av: MY_AV, ans: S.myAns });
+      if (S.code !== code) { g.leave(); return; }
+      S.game = g; S.hostGone = false; S.denied = null;
+      S.unsubGame = g.onPeers(onGamePeers, () => {});
+      g.presence({ name, av: MY_AV, ans: S.myAns });
+      S.rejoining = false; render(); keepAwake();
+      return;
+    } catch (e) {
+      const c = String((e && e.code) || "");
+      if (c === "deny-deny" || c === "deny-kick") { S.rejoining = false; S.denied = c.slice(5); S.game = S.game || old; render(); return; }
+      await new Promise(r => setTimeout(r, i < 4 ? 1500 : 3000)); // "name" (old link not cleared yet) and network errors: try again
+    }
+  }
+  S.rejoining = false;
+  if (S.code === code) { S.hostGone = true; S.game = { peers: () => [], status: () => "in", leave: async () => {}, presence: async () => {} }; render(); }
+}
 
 // Re-render players periodically so stale "no host" status updates
 setInterval(() => { if (S.game && !currentG()) render(); }, 2000);
